@@ -13,11 +13,14 @@ permissions:
 jobs:
   # Mirrors sigstore-go .github/workflows/build.yml: one build/test job over
   # macOS, Linux and Windows, fail-fast off. Conformance stays Linux-only.
+  # Windows deviates: windows-latest (VS 18, MSVC STL 14.52) requires Clang
+  # 22+, but Swift 6.4.3 bundles Clang 21 (STL1000). windows-2022's VS 2022
+  # toolset accepts it. Back to windows-latest once Swift 6.5 (Clang 23) ships.
   build:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-24.04, windows-latest]
+        os: [macos-latest, ubuntu-24.04, windows-2022]
         include:
           - os: ubuntu-24.04
             container: swift:6.4-noble

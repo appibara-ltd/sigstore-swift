@@ -40,9 +40,16 @@ at the end of every session.
 ## Requires the user's request
 
 - `git commit`, `git push`, tags, releases, PRs.
-- Commit messages: AI agents add a `Co-Authored-By:` trailer for
-  themselves. Propose commit messages to the user as a markdown code block
-  only.
+- Commit messages follow sigstore-go's `CONTRIBUTING.md` (Chris Beams'
+  "How to Write a Git Commit Message"), not Conventional Commits:
+  - imperative subject of about 50 characters, no `feat:`/`fix:` type; an
+    area prefix is fine (`CI: …`, `verify: …`);
+  - blank line, then a body wrapped at about 72 columns explaining why;
+  - issue references at the bottom (`Resolves: #123`).
+- Every commit is signed off (DCO): commit with `git commit -s`, which adds
+  `Signed-off-by:` for the committer. AI agents also add a
+  `Co-Authored-By:` trailer for themselves.
+- Propose commit messages to the user as a markdown code block only.
 
 ## Layout
 

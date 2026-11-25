@@ -171,9 +171,12 @@ sha256 `6494e21e…0b66`, fetched 2026-11-25.
   release Xcode with Swift 6.3 cannot build the package.
 - CI `build` job mirrors sigstore-go `build.yml`: build + test on
   `macos-latest`, `ubuntu-24.04` (`swift:6.4-noble` container) and
-  `windows-latest` (swift.org 6.4.3 via `compnerd/gha-setup-swift`),
-  `fail-fast: false`. Windows first added 2026-11-25; unverified until its
-  first run. TUF cache paths must stay portable when `SigstoreTUF` lands
+  `windows-2022` (swift.org 6.4.3 via `compnerd/gha-setup-swift`),
+  `fail-fast: false`. Deviation: sigstore-go uses `windows-latest`, whose
+  VS 18 MSVC STL (14.52) rejects Clang < 22 (STL1000, hit compiling
+  swift-crypto's BoringSSL C++), and Swift 6.4.3 bundles Clang 21. Switch to
+  `windows-latest` once Swift 6.5 (LLVM 23) is released; the unsupported
+  `_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH` escape hatch was rejected. TUF cache paths must stay portable when `SigstoreTUF` lands
   (sigstore-go uses `filepath.Join`).
 - Conformance CI is pinned to sigstore-conformance v0.0.29 (as sigstore-go);
   verify tests only (`skip-signing`), no staging run until signing exists.
