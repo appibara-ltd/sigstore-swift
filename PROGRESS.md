@@ -2,14 +2,18 @@
 
 Continuity log. Update at the end of every session.
 
-## Status (2026-11-25, session 1, part 7)
+## Status (2026-11-25, session 1, part 8)
 
-**Embedded trusted root removed; TUF roots compiled into source
-(uncommitted).** `main` (6805ba2) has streaming TUF download limits and
-Go's protojson base64 rules; CI run 45682496542 passed on macOS, Linux and
-conformance, Windows hit the resource-bundle build flake again (fixed here
-by removing library resource bundles). `swift test`: 113 tests pass on
-macOS.
+**0.1.0 released** (annotated tag on b52c003, GitHub Release with notes;
+SwiftPM resolves it). CI green on all four jobs for b52c003 (run
+45684538772, Windows first try without library resource bundles).
+`swift test`: 113 tests pass on macOS.
+
+Platform claims: the deployment target is macOS 13 (`Package.swift`;
+compile-time API availability is checked against it), but tests only run
+on the latest macOS (CI `macos-latest`), Linux and Windows. GitHub no longer
+offers macOS 13 runners. Say "deployment target macOS 13; tested on the
+latest macOS", not "macOS 13+".
 
 ### Conformance (sigstore-conformance, verify tests only)
 
@@ -21,7 +25,7 @@ Run locally with `scripts/run-conformance.sh` (needs `uv`); CI runs the
 | Suite ref | Passed | Expected failures | Unexpected | CPython release bundles |
 | --- | --- | --- | --- | --- |
 | v0.0.29 (CI pin) | 135 | 0 | 0 | 81/81 |
-| main e275ffb | 141 | 0 | 0 | 81/81 |
+| suite `main` e275ffb (unreleased; local run only) | 141 | 0 | 0 | 81/81 |
 
 `.github/conformance-xfail.txt` (strict) is empty. Every `_fail` case was
 re-checked by running the client on the asset dir: each is rejected for the
