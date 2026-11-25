@@ -27,6 +27,22 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      # The runner's Xcodes ship Swift 6.3; Package.swift needs tools 6.4.
+      # Install the swift.org toolchain with swiftly
+      # (https://www.swift.org/install/macos/).
+      - name: Install Swift 6.4 (swiftly)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/swiftly.pkg" https://download.swift.org/swiftly/darwin/swiftly.pkg
+          installer -pkg "$RUNNER_TEMP/swiftly.pkg" -target CurrentUserHomeDirectory
+          ~/.swiftly/bin/swiftly init --quiet-shell-followup --assume-yes --skip-install
+          . ~/.swiftly/env.sh
+          swiftly install --use --assume-yes 6.4
+          {
+            echo "SWIFTLY_HOME_DIR=$SWIFTLY_HOME_DIR"
+            echo "SWIFTLY_BIN_DIR=$SWIFTLY_BIN_DIR"
+            echo "SWIFTLY_TOOLCHAINS_DIR=$SWIFTLY_TOOLCHAINS_DIR"
+          } >> "$GITHUB_ENV"
+          echo "$SWIFTLY_BIN_DIR" >> "$GITHUB_PATH"
       - run: swift --version
       - run: swift test
 

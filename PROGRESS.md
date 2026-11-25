@@ -95,9 +95,9 @@ sha256 `6494e21e…0b66`, fetched 2026-11-25.
 
 ## Next steps (toward conformance)
 
-1. **First CI run**: push and fix whatever Linux / the GitHub action reveal
-   (Linux build is untested; the conformance job builds with
-   `--static-swift-stdlib` in `swift:6.4-noble` and runs on the host).
+1. **CI**: first run (45622716809) passed on Linux (tests + conformance);
+   macOS failed on Swift 6.3 and now installs 6.4 via swiftly — confirm the
+   next run is green.
 2. **RFC 3161 / TSA** (sigstore-go `pkg/verify/tsa.go`, `root/timestamping_authority.go`):
    parse TimeStampResp/TSTInfo (CMS SignedData) with swift-asn1, verify the
    signer chain to the TSA root at genTime, message imprint = hash of the
@@ -143,6 +143,10 @@ sha256 `6494e21e…0b66`, fetched 2026-11-25.
 - Extra strictness vs Go: Merkle proof hashes must be 32 bytes; Rekor v1
   body hashes must have the algorithm's length.
 - `swift-crypto` range `3.12.0..<6.0.0` (resolves to 5.2.0).
+- swift-tools-version stays 6.4. GitHub's macOS runners only have Xcode
+  Swift 6.3 (macos-26 image, Xcode up to 26.6 as of 2026-11-17), so the
+  macOS CI job installs Swift 6.4 with swiftly. Consequence: consumers on a
+  release Xcode with Swift 6.3 cannot build the package.
 - Conformance CI is pinned to sigstore-conformance v0.0.29 (as sigstore-go);
   verify tests only (`skip-signing`), no staging run until signing exists.
 - Rekor v1 `intoto` 0.0.2 signatures decode leniently like Go (bad inner
