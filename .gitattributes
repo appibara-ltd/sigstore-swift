@@ -1,0 +1,4 @@
+# Fixtures and embedded trust roots are signed or hashed byte for byte:
+# never convert their line endings (Windows checkouts use core.autocrlf).
+Tests/SigstoreTests/Fixtures/** -text
+Sources/**/Resources/** -text

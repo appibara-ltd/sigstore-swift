@@ -176,7 +176,10 @@ sha256 `6494e21e…0b66`, fetched 2026-11-25.
   VS 18 MSVC STL (14.52) rejects Clang < 22 (STL1000, hit compiling
   swift-crypto's BoringSSL C++), and Swift 6.4.3 bundles Clang 21. Switch to
   `windows-latest` once Swift 6.5 (LLVM 23) is released; the unsupported
-  `_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH` escape hatch was rejected. TUF cache paths must stay portable when `SigstoreTUF` lands
+  `_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH` escape hatch was rejected.
+- `.gitattributes` marks fixtures and embedded trust roots `-text`: the
+  first Windows run checked out the conformance `artifact` with CRLF, so its
+  digest no longer matched the signed statement. TUF cache paths must stay portable when `SigstoreTUF` lands
   (sigstore-go uses `filepath.Join`).
 - Conformance CI is pinned to sigstore-conformance v0.0.29 (as sigstore-go);
   verify tests only (`skip-signing`), no staging run until signing exists.
