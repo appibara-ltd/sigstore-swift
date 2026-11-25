@@ -111,7 +111,7 @@ public struct TrustedRoot: TrustedMaterial {
 /// Mirrors `NewTrustedRootProtobuf`.
 public func newTrustedRootProtobuf(_ rootJSON: Data) throws -> Dev_Sigstore_Trustroot_V1_TrustedRoot {
     do {
-        return try Dev_Sigstore_Trustroot_V1_TrustedRoot(jsonUTF8Data: rootJSON)
+        return try Dev_Sigstore_Trustroot_V1_TrustedRoot(jsonUTF8Data: ProtoJSON.normalizeBytesFields(rootJSON))
     } catch {
         throw SigstoreError("failed to proto-json unmarshal trusted root", underlying: error)
     }

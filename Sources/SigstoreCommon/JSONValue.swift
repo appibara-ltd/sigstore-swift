@@ -1,4 +1,5 @@
-// JSON values with exact number text, and OLPC canonical JSON.
+// JSON values with exact number text, plain serialization, and OLPC
+// canonical JSON.
 //
 // TUF signatures cover the canonical JSON of the `signed` object. go-tuf
 // computes it as secure-systems-lab/go-securesystemslib v0.11.1
@@ -7,7 +8,6 @@
 // Numbers are kept as their literal text, as `json.Decoder.UseNumber` does.
 
 import Foundation
-import SigstoreCommon
 
 /// A parsed JSON value.
 public indirect enum JSONValue: Sendable, Equatable {
@@ -19,9 +19,12 @@ public indirect enum JSONValue: Sendable, Equatable {
     case bool(Bool)
     case null
 
-    /// Parses `data` (RFC 8259; duplicate keys: last wins, as Go).
-    public init(parsing data: Data) throws {
+    /// Parses `data` (RFC 8259). Duplicate object keys: last wins, as Go's
+    /// encoding/json; with `rejectDuplicateKeys` they are an error, as Go's
+    /// protojson ("duplicate field").
+    public init(parsing data: Data, rejectDuplicateKeys: Bool = false) throws {
         var parser = JSONParser(bytes: Array(data))
+        parser.rejectDuplicateKeys = rejectDuplicateKeys
         parser.skipWhitespace()
         self = try parser.parseValue(depth: 0)
         parser.skipWhitespace()
@@ -43,6 +46,51 @@ public indirect enum JSONValue: Sendable, Equatable {
     public var int64Value: Int64? {
         guard case .number(let text) = self else { return nil }
         return Int64(text)
+    }
+
+    /// Plain JSON text: keys sorted, strings escaping `"`, `\` and control
+    /// characters only, numbers as their original text.
+    public func serialized() -> Data {
+        var out: [UInt8] = []
+        serialize(into: &out)
+        return Data(out)
+    }
+
+    private func serialize(into out: inout [UInt8]) {
+        switch self {
+        case .object(let o):
+            out.append(UInt8(ascii: "{"))
+            for (i, k) in o.keys.sorted().enumerated() {
+                if i > 0 { out.append(UInt8(ascii: ",")) }
+                JSONValue.string(k).serialize(into: &out)
+                out.append(UInt8(ascii: ":"))
+                o[k]!.serialize(into: &out)
+            }
+            out.append(UInt8(ascii: "}"))
+        case .array(let a):
+            out.append(UInt8(ascii: "["))
+            for (i, v) in a.enumerated() {
+                if i > 0 { out.append(UInt8(ascii: ",")) }
+                v.serialize(into: &out)
+            }
+            out.append(UInt8(ascii: "]"))
+        case .string(let s):
+            out.append(UInt8(ascii: "\""))
+            for u in s.unicodeScalars {
+                switch u {
+                case "\"": out += Array("\\\"".utf8)
+                case "\\": out += Array("\\\\".utf8)
+                case _ where u.value < 0x20:
+                    let hex = String(u.value, radix: 16)
+                    out += Array(("\\u" + String(repeating: "0", count: 4 - hex.count) + hex).utf8)
+                default: out += Array(String(u).utf8)
+                }
+            }
+            out.append(UInt8(ascii: "\""))
+        case .number(let n): out += Array(n.utf8)
+        case .bool(let b): out += Array((b ? "true" : "false").utf8)
+        case .null: out += Array("null".utf8)
+        }
     }
 
     /// OLPC canonical JSON (securesystemslib `EncodeCanonical`): keys sorted
@@ -102,6 +150,7 @@ public indirect enum JSONValue: Sendable, Equatable {
 struct JSONParser {
     let bytes: [UInt8]
     var index = 0
+    var rejectDuplicateKeys = false
     static let maxDepth = 512
 
     init(bytes: [UInt8]) { self.bytes = bytes }
@@ -147,6 +196,7 @@ struct JSONParser {
             guard index < bytes.count, bytes[index] == UInt8(ascii: ":") else { throw error("expected ':'") }
             index += 1
             skipWhitespace()
+            if rejectDuplicateKeys && o[key] != nil { throw error("duplicate field \(key)") }
             o[key] = try parseValue(depth: depth + 1)
             skipWhitespace()
             guard index < bytes.count else { throw error("unexpected end") }

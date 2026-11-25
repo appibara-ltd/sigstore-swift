@@ -21,14 +21,25 @@ public protocol Fetcher: Sendable {
 
 /// Mirrors `fetcher.DefaultFetcher` as configured by sigstore-go
 /// (`newDefaultFetcher`: retrying HTTP client, sigstore user agent).
+///
+/// Like go-tuf, a response whose `Content-Length` exceeds `maxLength` is
+/// rejected before its body is read, and the body is streamed and
+/// abandoned as soon as it exceeds `maxLength`, whatever the header says.
 public struct DefaultFetcher: Fetcher {
     public var userAgent: String
     /// Attempts for transport errors, 429 and 5xx responses.
     public var maxAttempts: Int
+    /// Builds the session configuration for each download (tests inject
+    /// `protocolClasses`).
+    public var sessionConfiguration: @Sendable () -> URLSessionConfiguration
 
-    public init(userAgent: String = "sigstore-swift", maxAttempts: Int = 3) {
+    public init(
+        userAgent: String = "sigstore-swift", maxAttempts: Int = 3,
+        sessionConfiguration: @escaping @Sendable () -> URLSessionConfiguration = { .ephemeral }
+    ) {
         self.userAgent = userAgent
         self.maxAttempts = maxAttempts
+        self.sessionConfiguration = sessionConfiguration
     }
 
     public func downloadFile(_ url: String, maxLength: Int64) async throws -> Data {
@@ -39,19 +50,10 @@ public struct DefaultFetcher: Fetcher {
         while true {
             attempt += 1
             do {
-                let (data, response) = try await fetch(request)
-                guard let http = response as? HTTPURLResponse else { throw TUFError.download("not an HTTP response") }
-                if (http.statusCode == 429 || http.statusCode >= 500) && attempt < maxAttempts {
-                    try await backoff(attempt)
-                    continue
-                }
-                guard http.statusCode == 200 else { throw TUFError.downloadHTTP(statusCode: http.statusCode, url: url) }
-                if http.expectedContentLength > maxLength || Int64(data.count) > maxLength {
-                    throw TUFError.downloadLengthMismatch(
-                        "download failed for \(url), length \(max(http.expectedContentLength, Int64(data.count))) is larger than expected \(maxLength)"
-                    )
-                }
-                return data
+                return try await LimitedDownload(url: url, maxLength: maxLength).run(
+                    request, configuration: sessionConfiguration())
+            } catch TUFError.downloadHTTP(let status, _) where (status == 429 || status >= 500) && attempt < maxAttempts {
+                try await backoff(attempt)
             } catch let error as TUFError {
                 throw error
             } catch {
@@ -64,19 +66,89 @@ public struct DefaultFetcher: Fetcher {
     private func backoff(_ attempt: Int) async throws {
         try await Task.sleep(nanoseconds: UInt64(attempt) * 500_000_000)
     }
+}
 
-    private func fetch(_ request: URLRequest) async throws -> (Data, URLResponse) {
-        try await withCheckedThrowingContinuation { continuation in
-            URLSession.shared.dataTask(with: request) { data, response, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else if let data, let response {
-                    continuation.resume(returning: (data, response))
-                } else {
-                    continuation.resume(throwing: TUFError.download("empty response"))
-                }
-            }.resume()
+/// One size-limited download (the `io.LimitReader(res.Body, maxLength+1)`
+/// of go-tuf's fetcher, as a URLSession delegate).
+final class LimitedDownload: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    private let url: String
+    private let maxLength: Int64
+    private let lock = NSLock()
+    private var received = Data()
+    private var failure: (any Error)?
+    private var continuation: CheckedContinuation<Data, any Error>?
+
+    init(url: String, maxLength: Int64) {
+        self.url = url
+        self.maxLength = maxLength
+    }
+
+    func run(_ request: URLRequest, configuration: URLSessionConfiguration) async throws -> Data {
+        let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
+        defer { session.finishTasksAndInvalidate() }
+        return try await withCheckedThrowingContinuation { continuation in
+            lock.lock()
+            self.continuation = continuation
+            lock.unlock()
+            session.dataTask(with: request).resume()
         }
+    }
+
+    private func fail(_ error: any Error) {
+        lock.lock()
+        if failure == nil { failure = error }
+        lock.unlock()
+    }
+
+    private func tooLarge(_ length: Int64) -> TUFError {
+        .downloadLengthMismatch("download failed for \(url), length \(length) is larger than expected \(maxLength)")
+    }
+
+    func urlSession(
+        _ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
+        completionHandler: @escaping @Sendable (URLSession.ResponseDisposition) -> Void
+    ) {
+        guard let http = response as? HTTPURLResponse else {
+            fail(TUFError.download("not an HTTP response"))
+            return completionHandler(.cancel)
+        }
+        guard http.statusCode == 200 else {
+            fail(TUFError.downloadHTTP(statusCode: http.statusCode, url: url))
+            return completionHandler(.cancel)
+        }
+        if http.expectedContentLength > maxLength {
+            fail(tooLarge(http.expectedContentLength))
+            return completionHandler(.cancel)
+        }
+        completionHandler(.allow)
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        lock.lock()
+        received.append(data)
+        let count = Int64(received.count)
+        lock.unlock()
+        if count > maxLength {
+            fail(tooLarge(count))
+            dataTask.cancel()
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
+        lock.lock()
+        let continuation = self.continuation
+        self.continuation = nil
+        let result: Result<Data, any Error>
+        if let failure {
+            result = .failure(failure)
+        } else if let error {
+            result = .failure(error)
+        } else {
+            result = .success(received)
+        }
+        received = Data()
+        lock.unlock()
+        continuation?.resume(with: result)
     }
 }
 

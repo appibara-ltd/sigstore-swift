@@ -209,7 +209,9 @@ func validateHashedRekordV002Entry(_ hr: Dev_Sigstore_Rekor_V2_HashedRekordLogEn
 /// rejected), hashedrekord with apiVersion 0.0.2 only. Returns nil for
 /// anything else so the caller falls back to Rekor v1.
 func unmarshalRekorV2Entry(_ body: Data) -> Dev_Sigstore_Rekor_V2_Entry? {
-    guard let entry = try? Dev_Sigstore_Rekor_V2_Entry(jsonUTF8Data: body) else { return nil }
+    guard let normalized = try? ProtoJSON.normalizeBytesFields(body),
+        let entry = try? Dev_Sigstore_Rekor_V2_Entry(jsonUTF8Data: normalized)
+    else { return nil }
     guard case .hashedRekordV002 = entry.spec.spec, entry.apiVersion == "0.0.2" else { return nil }
     return entry
 }

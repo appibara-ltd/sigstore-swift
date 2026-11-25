@@ -67,11 +67,12 @@ public struct Bundle: SignedEntity {
         try validate()
     }
 
-    /// Mirrors `Bundle.UnmarshalJSON` (protojson; unknown fields are errors).
+    /// Mirrors `Bundle.UnmarshalJSON` (protojson; unknown fields and
+    /// duplicate fields are errors; bytes fields use Go's base64 rules).
     public init(json: Data, options: [BundleOption] = []) throws {
         let pb: Dev_Sigstore_Bundle_V1_Bundle
         do {
-            pb = try Dev_Sigstore_Bundle_V1_Bundle(jsonUTF8Data: json)
+            pb = try Dev_Sigstore_Bundle_V1_Bundle(jsonUTF8Data: ProtoJSON.normalizeBytesFields(json))
         } catch {
             throw SigstoreError("failed to unmarshal bundle JSON", underlying: error)
         }

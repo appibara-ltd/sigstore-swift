@@ -2,12 +2,11 @@
 
 Continuity log. Update at the end of every session.
 
-## Status (2026-11-25, session 1, part 5)
+## Status (2026-11-25, session 1, part 6)
 
-**TUF client implemented (uncommitted).** `main` (158dec7) has Rekor v2 with
-every conformance verify test passing; CI green (run 45670812593, Windows
-on its second attempt, see Spec questions). `swift test`: 102 tests pass on
-macOS.
+**Streaming TUF download limits and Go's protojson base64 rules
+implemented (uncommitted).** `main` (dc67ba8) has the TUF client; CI green
+on all four jobs (run 45677482489). `swift test`: 112 tests pass on macOS.
 
 ### Conformance (sigstore-conformance, verify tests only)
 
@@ -23,8 +22,10 @@ Run locally with `scripts/run-conformance.sh` (needs `uv`); CI runs the
 
 `.github/conformance-xfail.txt` (strict) is empty. Every `_fail` case was
 re-checked by running the client on the asset dir: each is rejected for the
-defect it targets, except `rekor2-timestamp-with-incorrect-time_fail`
-(see Spec questions: rejected at bundle parsing, before the timestamp check).
+defect it targets. `rekor2-timestamp-with-incorrect-time_fail` is rejected
+at bundle parsing with the same error as sigstore-go's own client
+("invalid value for bytes field signedTimestamp"; checked by building
+sigstore-go v1.4.1 `test/conformance` and running it on the asset).
 
 When no `--trusted-root` is given, the client fetches `trusted_root.json`
 over TUF from the public-good repository, or with `--staging` the staging
@@ -168,16 +169,13 @@ sha256 `6494e21e…0b66`, fetched 2026-11-25.
    root with `Options().withRoot(...).withRepositoryBaseURL(
    "https://tuf-repo.github.com")`, as `gh` does (sigstore-go has no
    GitHub-specific code).
-3. **Base64 leniency**: Go's protojson accepts `\n`/`\r` inside base64
-   bytes fields (`base64.StdEncoding` skips them); swift-protobuf rejects
-   them (see Spec questions). Decide whether to match.
-4. `LiveTrustedRoot`; decide whether `TrustedRoot.embeddedPublicGood()`
+3. `LiveTrustedRoot`; decide whether `TrustedRoot.embeddedPublicGood()`
    should stay (sigstore-go has no embedded trusted root).
-5. Prehashed signature verification (message signatures with digest only),
+4. Prehashed signature verification (message signatures with digest only),
    Ed25519ph, ML-DSA, `SigningConfig`, `VerificationResult` JSON.
-6. Fuzz/property tests for parsers (bundle, Rekor bodies, CMS/TSTInfo), then a
+5. Fuzz/property tests for parsers (bundle, Rekor bodies, CMS/TSTInfo), then a
    security review before announcing.
-7. appitool integration: replace `gh attestation verify --bundle` in
+6. appitool integration: replace `gh attestation verify --bundle` in
    `self-update` (fetch bundles from the attestations API, verify with the
    provenance policy above, check `predicateType`).
 
@@ -230,8 +228,17 @@ sha256 `6494e21e…0b66`, fetched 2026-11-25.
   `snapshot.json` meta is an error (Go would nil-dereference).
 - `tuf.Client` is an actor; `Options` uses `with...` copies; the fetcher is
   async (`URLSession`) with up to 3 attempts on transport errors, 429 and
-  5xx (sigstore-go uses an httpretry client). Downloads are size-checked
-  after completion, not streamed with a limit.
+  5xx (sigstore-go uses an httpretry client). As go-tuf's fetcher, a
+  `Content-Length` above the limit is rejected before the body is read and
+  the body is streamed and abandoned once it exceeds the limit
+  (`LimitedDownload`, a `URLSessionDataDelegate`).
+- protojson inputs (bundles, trusted roots, Rekor v2 bodies) go through
+  `ProtoJSON.normalizeBytesFields` before swift-protobuf: bytes fields
+  (by JSON/proto name; no string field shares those names) are decoded with
+  Go protojson's base64 rules (std or URL alphabet, no-padding mode when the
+  length is not a multiple of 4, `\r`/`\n` skipped) and re-encoded, or
+  rejected as Go would; duplicate fields are rejected as protojson does.
+  `JSONValue` moved from SigstoreTUF to SigstoreCommon for this.
 - Consistent-snapshot target paths prefer the sha256 hash (Go picks an
   arbitrary map entry).
 - The conformance client fetches trusted roots over TUF like sigstore-go;
@@ -277,10 +284,11 @@ sha256 `6494e21e…0b66`, fetched 2026-11-25.
   id-ct-TSTInfo nor the signed `contentType` attribute (RFC 5652 §11.1,
   RFC 3161 §2.4.2). Kept for parity; worth raising upstream.
 - `rekor2-timestamp-with-incorrect-time_fail` carries base64 wrapped at 76
-  columns (`\n` inside the JSON string). Go protojson decodes it (Go's
-  base64 decoder skips newlines) and then rejects the timestamp; we reject
-  the bundle as malformed JSON bytes. Same verdict, different reason; the
-  targeted check is covered by `intoto-tsa-timestamp-outside-cert-validity_fail`.
+  columns ending in `=`, with a total length not a multiple of 4: Go's
+  protojson then decodes without padding and rejects the `=`, so neither
+  sigstore-go nor we reach the timestamp check this case targets (it is
+  covered by `intoto-tsa-timestamp-outside-cert-validity_fail`). Worth
+  reporting to sigstore-conformance.
 - go-tuf matches `path_hash_prefixes` against base64url(sha256(path)); the
   TUF spec uses the hex digest. Mirrored; worth raising upstream.
 - The Windows CI build once failed when swift-build touched the
