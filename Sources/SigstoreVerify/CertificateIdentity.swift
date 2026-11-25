@@ -115,6 +115,13 @@ public struct CertificateIdentity: Sendable, Hashable {
     public var issuer: IssuerMatcher
     public var extensions: Extensions
 
+    /// Without `NewCertificateIdentity`'s checks (Go struct literal / JSON decoding).
+    init(unchecked san: SubjectAlternativeNameMatcher, issuer: IssuerMatcher, extensions: Extensions) {
+        self.subjectAlternativeName = san
+        self.issuer = issuer
+        self.extensions = extensions
+    }
+
     /// Mirrors `NewCertificateIdentity`.
     public init(
         subjectAlternativeName: SubjectAlternativeNameMatcher,

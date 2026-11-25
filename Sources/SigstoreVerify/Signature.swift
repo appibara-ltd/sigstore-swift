@@ -137,11 +137,9 @@ func verifySignatureWithVerifierAndArtifactDigests(
 /// Mirrors `compatSignatureVerifier`. For bundles <= v0.3, ECDSA P-384/P-521
 /// keys additionally accept SHA-256 (historical client behaviour).
 func compatSignatureVerifier(_ leafCert: Certificate, enableCompat: Bool, isDSSE: Bool) throws -> CompatVerifier {
-    let defaultVerifier = try SignatureVerifier(publicKey: leafCert.publicKey)
-    if defaultVerifier.isEd25519 && !isDSSE {
-        // sigstore-go loads Ed25519ph for message signatures (hashedrekord).
-        throw SigstoreError("Ed25519ph message signatures are not supported yet")
-    }
+    // DSSE uses pure Ed25519; message signatures (hashedrekord) load
+    // Ed25519 keys as Ed25519ph, "because this is the only option".
+    let defaultVerifier = try SignatureVerifier(publicKey: leafCert.publicKey, useED25519ph: !isDSSE)
     guard enableCompat else { return CompatVerifier(verifiers: [defaultVerifier]) }
     switch defaultVerifier.key {
     case .ecdsaP384, .ecdsaP521:

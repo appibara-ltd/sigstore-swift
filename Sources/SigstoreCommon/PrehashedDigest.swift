@@ -1,5 +1,7 @@
 import Crypto
 import Foundation
+import SigstoreCryptoExtras
+import _CryptoExtras
 
 /// A precomputed digest, so ECDSA can verify a signature over a digest we
 /// did not compute (sigstore `options.WithDigest`). One type per size,
@@ -68,8 +70,27 @@ extension SignatureVerifier {
             throw SigstoreError(
                 "message signatures with ed25519 signatures can only be verified with artifacts, and not just their digest"
             )
-        case .rsaPKCS1v15:
-            throw SigstoreError("verifying RSA signatures over a precomputed digest is not supported yet")
+        case .ed25519ph(let k):
+            // The digest is the SHA-512 prehash (length checked above).
+            return Ed25519ph.isValidSignature(signature, prehash: digest, publicKey: k.rawRepresentation)
+        case .rsaPKCS1v15(let k):
+            // Go rsa.VerifyPKCS1v15 over the digest (sigstore RSAPKCS1v15Verifier).
+            let components: RSAPublicKeyComponents
+            do {
+                components = try RSAPublicKeyComponents(pkcs1DER: k.pkcs1DERRepresentation)
+            } catch {
+                throw SigstoreError("invalid RSA public key", underlying: error)
+            }
+            let hash: RSADigestVerifier.Hash
+            switch hashFunction {
+            case .sha256: hash = .sha256
+            case .sha384: hash = .sha384
+            case .sha512: hash = .sha512
+            }
+            return RSADigestVerifier.isValidPKCS1v15(signature, digest: digest, hash: hash, key: components)
+        case .mlDSA:
+            // sigstore MLDSAVerifier: "WithDigest is not supported for ML-DSA".
+            throw SigstoreError("WithDigest is not supported for ML-DSA")
         }
     }
 }

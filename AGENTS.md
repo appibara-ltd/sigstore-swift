@@ -66,5 +66,7 @@ at the end of every session.
 | `SigstoreTUF` | `pkg/tuf` (+ go-tuf v2 `metadata`) |
 | `SigstoreVerify` | `pkg/verify` |
 | `SigstoreFulcio` | `pkg/fulcio/certificate` |
+| `SigstoreMLDSA` | Go `crypto/mldsa` (verify only, pure Swift) |
+| `SigstoreCryptoExtras` | Go `crypto/ed25519` Ed25519ph and `crypto/rsa` over a digest (verify only, pure Swift) |
 | `SigstoreCommon` | helpers standing in for `sigstore/sigstore` signature verifiers etc. |
 | `Sigstore` | umbrella, re-exports all of the above |

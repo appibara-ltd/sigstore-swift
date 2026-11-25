@@ -8,8 +8,8 @@ Status and roadmap: [PROGRESS.md](PROGRESS.md).
 
 ## Requirements
 
-Swift 6.4. Deployment target macOS 13; tested on the latest macOS, Linux and
-Windows.
+Swift 6.4. macOS 26 or later, Linux or Windows (tested on the latest macOS,
+Linux and Windows).
 
 ```swift
 .package(url: "https://github.com/appibara-ltd/sigstore-swift.git", branch: "main")

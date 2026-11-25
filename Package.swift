@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "sigstore-swift",
-    platforms: [.macOS(.v13)],
+    platforms: [.macOS(.v26)],
     products: [
         .executable(name: "sigstore-swift-conformance", targets: ["sigstore-swift-conformance"]),
         .library(name: "Sigstore", targets: ["Sigstore"]),
@@ -14,6 +14,8 @@ let package = Package(
         .library(name: "SigstoreVerify", targets: ["SigstoreVerify"]),
         .library(name: "SigstoreProtobufSpecs", targets: ["SigstoreProtobufSpecs"]),
         .library(name: "SigstoreFulcio", targets: ["SigstoreFulcio"]),
+        .library(name: "SigstoreMLDSA", targets: ["SigstoreMLDSA"]),
+        .library(name: "SigstoreCryptoExtras", targets: ["SigstoreCryptoExtras"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-crypto.git", "3.12.0"..<"6.0.0"),
@@ -32,6 +34,8 @@ let package = Package(
         .target(
             name: "SigstoreCommon",
             dependencies: [
+                "SigstoreMLDSA",
+                "SigstoreCryptoExtras",
                 .product(name: "Crypto", package: "swift-crypto"),
                 .product(name: "_CryptoExtras", package: "swift-crypto"),
                 .product(name: "X509", package: "swift-certificates"),
@@ -71,11 +75,22 @@ let package = Package(
                 .product(name: "X509", package: "swift-certificates"),
             ]
         ),
+        // Pure-Swift ML-DSA (FIPS 204) signature verification, standing in for
+        // Go's crypto/mldsa (swift-crypto exposes no ML-DSA-44).
+        .target(name: "SigstoreMLDSA"),
+        // Pure-Swift Ed25519ph (RFC 8032) and RSA PKCS#1 v1.5 / PSS verification
+        // over a precomputed digest, standing in for Go's crypto/ed25519
+        // (Options.Hash) and crypto/rsa, which swift-crypto does not expose.
+        .target(
+            name: "SigstoreCryptoExtras",
+            dependencies: [.product(name: "Crypto", package: "swift-crypto")]
+        ),
         // Mirrors sigstore-go pkg/tuf (with go-tuf v2's metadata/updater).
         .target(
             name: "SigstoreTUF",
             dependencies: [
                 "SigstoreCommon",
+                "SigstoreCryptoExtras",
                 .product(name: "Crypto", package: "swift-crypto"),
                 .product(name: "_CryptoExtras", package: "swift-crypto"),
                 .product(name: "X509", package: "swift-certificates"),
@@ -117,6 +132,8 @@ let package = Package(
                 "SigstoreProtobufSpecs",
                 "SigstoreCommon",
                 "SigstoreFulcio",
+                "SigstoreMLDSA",
+                "SigstoreCryptoExtras",
                 "SigstoreBundle",
                 "SigstoreRoot",
                 "SigstoreTLog",
@@ -131,6 +148,16 @@ let package = Package(
                 "Sigstore",
                 .product(name: "X509", package: "swift-certificates"),
             ]
+        ),
+        .testTarget(
+            name: "SigstoreCryptoExtrasTests",
+            dependencies: ["SigstoreCryptoExtras", .product(name: "Crypto", package: "swift-crypto")],
+            resources: [.copy("Vectors")]
+        ),
+        .testTarget(
+            name: "SigstoreMLDSATests",
+            dependencies: ["SigstoreMLDSA"],
+            resources: [.copy("Vectors")]
         ),
         .testTarget(
             name: "SigstoreTests",

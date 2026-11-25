@@ -2,18 +2,22 @@
 
 Continuity log. Update at the end of every session.
 
-## Status (2026-11-25, session 1, part 8)
+## Status (2026-11-25, session 1, part 9)
 
-**0.1.0 released** (annotated tag on b52c003, GitHub Release with notes;
-SwiftPM resolves it). CI green on all four jobs for b52c003 (run
-45684538772, Windows first try without library resource bundles).
-`swift test`: 113 tests pass on macOS.
+**Verify-side parity work with sigstore-go v1.4.1 (uncommitted).** Added
+pure-Swift ML-DSA (44/65/87), Ed25519ph and RSA-over-digest verification,
+`LiveTrustedRoot`, `VerificationResult` JSON (byte-for-value equal to
+sigstore-go's output on two real bundles), strict in-toto statements from
+generated protos, `BundleV2` and the v2 verifier API, Go's `path.Match`,
+and a libFuzzer harness (Linux/CI only, not yet run). `main` (9abae8f) has
+0.1.0 + docs. `swift test`: 174 tests pass on macOS (main suite 135,
+ML-DSA 24, crypto extras 15); conformance 135/135 (pin) and 141/141
+(suite main).
 
-Platform claims: the deployment target is macOS 13 (`Package.swift`;
-compile-time API availability is checked against it), but tests only run
-on the latest macOS (CI `macos-latest`), Linux and Windows. GitHub no longer
-offers macOS 13 runners. Say "deployment target macOS 13; tested on the
-latest macOS", not "macOS 13+".
+Platform: macOS 26 or later (`platforms: [.macOS(.v26)]`, raised from 13
+after 0.1.0 at the user's request), Linux, Windows. CI tests the latest
+macOS (`macos-latest`, macOS 26), Linux and Windows. 0.1.0 itself still
+declares macOS 13.
 
 ### Conformance (sigstore-conformance, verify tests only)
 
@@ -86,6 +90,36 @@ and a policy of artifact digest + OIDC issuer
   Verified live against `tuf-repo-cdn.sigstore.dev` and
   `tuf-repo.github.com` (gh's root v3 → v9). `fetchTrustedRoot()`,
   `fetchTrustedRootWithOptions(_:)`, `getTrustedRoot(_:)` in SigstoreRoot.
+- ML-DSA (FIPS 204) verification for ML-DSA-44/65/87 in pure Swift
+  (`Sources/SigstoreMLDSA`, with Keccak/SHAKE): tested against Go 1.27
+  `crypto/mldsa` vectors (24 per parameter set, incl. malformed hints and z
+  bounds) and NIST ACVP sigVer (15 per set). Wired in as pure ML-DSA with
+  an empty context (sigstore `MLDSAVerifier`): SPKI keys
+  (`SigstorePublicKey`), `ML_DSA_44` trusted-root log keys, rekor-tiles
+  ML-DSA-44 note key IDs and cosignature/v1 checkpoint signatures, Rekor v2
+  key details, digest-only verification refused as in Go.
+- Ed25519ph (RFC 8032) and RSA PKCS#1 v1.5 / PSS over a precomputed digest
+  in pure Swift (`Sources/SigstoreCryptoExtras`), tested against Go 1.27
+  vectors (43 Ed25519ph, 530 RSA) incl. the RFC 8032 §7.3 vector, with a
+  mutation check per security check. Certificate message signatures with
+  Ed25519 keys verify as Ed25519ph (sigstore-go `compatSignatureVerifier`),
+  also with only a SHA-512 digest; RSA keys verify digest-only; TUF
+  RSA-PSS keys verify with salt auto-detection (go-tuf).
+- `LiveTrustedRoot` (background TUF refresh, keeps the last good root,
+  `stop()` in place of Go's context cancellation).
+- `VerificationResult.jsonData()` / `init(json:)`: equal to sigstore-go
+  v1.4.1's `json.Marshal` output for the provenance and release bundles
+  (`scripts/verificationresult-reference`, `Fixtures/verification-result-*.go.json`).
+- in-toto Statement from generated in-toto/attestation v1.2.0 protos:
+  strict protojson for full statements (as `Envelope.Statement()`), Go's
+  lenient "lite" decode when the predicate is skipped (`summarizeStatement`).
+- `BundleV2` (validation, accessors, JSON) and the v1.4.1 v2 API:
+  `VerifiableEntity`, `IdentityVerifier`, `PKIVerifier` (+
+  `withPKISignedTimestamps`), `KeyVerifier` (+ `withKeySignedTimestamps`),
+  whose `verify` throws "not implemented" exactly as in sigstore-go.
+- TUF delegation paths use a port of Go's `path.Match` (polynomial time,
+  Go's bad-pattern semantics), replacing a recursive matcher that was
+  exponential on star-heavy patterns.
 - RFC 3161 signed timestamps (`Sources/SigstoreRoot/RFC3161.swift`, port of
   timestamp-authority v2.2.0 `pkg/verification` + digitorus `timestamp` /
   `pkcs7` at sigstore-go's pins): TimeStampResp status, CMS SignedData
@@ -114,19 +148,14 @@ and a policy of artifact digest + OIDC issuer
 
 ### Stubbed / not implemented
 
+- ML-DSA inside X.509 certificates (Fulcio leaves, TSA chains):
+  swift-certificates cannot parse ML-DSA keys or signatures. ML-DSA is
+  supported for raw keys only (managed keys, log keys).
 - RFC 3161: BER-encoded tokens, `subjectKeyIdentifier` signer IDs (also
-  unsupported by Go's pkcs7), ML-DSA TSA keys, revocation (not checked by Go
-  either).
-- Rekor v2: ML-DSA log keys (cosignature/v1 note framing), RSA-PSS
-  signing keys (sigstore-go's default details never pick PSS either).
-- TUF: `LiveTrustedRoot` (periodic refresh), go-tuf `multirepo`, RSA-PSS
-  keys with salt lengths other than the digest length (swift-crypto
-  verifies PSS with salt = digest length; Go accepts any).
-- Message signatures over a digest only: ECDSA done (prehashed `Digest`
-  wrapper); RSA not (swift-crypto RSA rejects foreign digest types).
-  Ed25519ph; ML-DSA tlog keys.
-- `IdentityVerifier` / `VerifiableEntity` / bundle v2, `SigningConfig`,
-  `LiveTrustedRoot`, `VerificationResult` JSON encoding.
+  unsupported by Go's pkcs7), revocation (not checked by Go either).
+- `SigningConfig` (signing-side; parse-only in sigstore-go `pkg/root`),
+  go-tuf `multirepo`. The v2 verifiers are not implemented in sigstore-go
+  v1.4.1 either.
 
 ### Fixtures
 
@@ -170,25 +199,22 @@ hash-prefixed `trusted_root.json`. Tests pin the reference time to
 `targets/trusted_root.json` @ main, sha256 `6494e21e…0b66`, fetched
 2026-11-25 (test fixture only; the package embeds no trusted root).
 
-## Next steps (toward conformance)
+## Next steps
 
-1. **CI**: confirm the TUF commit is green (conformance now needs network
-   for TUF; Windows no longer builds a conformance resource bundle).
-2. **appitool**: embed `gh`'s GitHub TUF root and fetch GitHub's trusted
+1. **CI**: first run of the parity commit, including the new `fuzz` job
+   (the harness has never been compiled: Linux-only).
+2. Fix whatever fuzzing finds; then a security review before announcing
+   (focus: the four hand-written primitives and parsers).
+3. **appitool**: embed `gh`'s GitHub TUF root and fetch GitHub's trusted
    root with `Options().withRoot(...).withRepositoryBaseURL(
-   "https://tuf-repo.github.com")`, as `gh` does (sigstore-go has no
-   GitHub-specific code).
-3. `LiveTrustedRoot`.
-4. Prehashed signature verification (message signatures with digest only),
-   Ed25519ph, ML-DSA, `SigningConfig`, `VerificationResult` JSON.
-5. Fuzz/property tests for parsers (bundle, Rekor bodies, CMS/TSTInfo), then a
-   security review before announcing.
-6. appitool integration: replace `gh attestation verify --bundle` in
-   `self-update` (fetch bundles from the attestations API, verify with the
-   provenance policy above, check `predicateType`).
+   "https://tuf-repo.github.com")`, as `gh` does; replace `gh attestation
+   verify --bundle` in `self-update`.
+4. Tag 0.2.0 once CI and fuzzing are green.
 
 ## Decisions
 
+- Minimum macOS is 26 (after 0.1.0, user decision): no support for older
+  macOS. Linux and Windows unchanged.
 - Verify-only first; signing later.
 - Mirror sigstore-go names (see AGENTS.md for translation rules).
 - Protobuf types generated from protobuf-specs @ `a84bc5ff572a` (the commit
@@ -234,6 +260,28 @@ hash-prefixed `trusted_root.json`. Tests pin the reference time to
   (both `paths` and `path_hash_prefixes`, or both `roles` and
   `succinct_roles`) is rejected at parse. A timestamp without
   `snapshot.json` meta is an error (Go would nil-dereference).
+- Cryptography swift-crypto lacks is implemented in pure Swift, in
+  separate targets with Go-generated vectors (user decision, 2026-11-25):
+  `SigstoreMLDSA` (FIPS 204 verify + SHAKE; swift-crypto has no ML-DSA-44
+  and its 65/87 come from CryptoKit) and `SigstoreCryptoExtras` (Ed25519ph,
+  RSA PKCS#1 v1.5/PSS over a digest). Verification only. Deviations, all
+  fail-closed: Ed25519 key encodings are decoded strictly per RFC 8032
+  §5.1.3 (Go's `SetBytes` accepts y ≥ p and x = 0 with the sign bit); RSA
+  moduli above 16384 bits are rejected (Go: no upper bound); PSS
+  `saltLength: 0` means exactly zero (Go's 0 means auto; we use `nil`).
+- `SigstorePublicKey` (classical `Certificate.PublicKey` or ML-DSA)
+  replaces `Certificate.PublicKey` in `SignatureVerifier.publicKey`,
+  `TransparencyLog.publicKey` and `EntryPublicKey.publicKey`.
+- `VerificationResult` JSON keys are emitted sorted (Go: struct order);
+  values, `omitempty` rules, `"statement": {}` for no statement and
+  `null` for no timestamps match Go. Times are UTC (Go uses the local zone).
+- Go's `BaseSignedEntity` / `BaseVerifiableEntity` are protocol-extension
+  defaults on `SignedEntity` / `VerifiableEntity`.
+- ProtoJSON's bytes normalization skips free-form `google.protobuf.Struct`
+  fields (`predicate`, `annotations`), whose keys are not proto fields.
+- Fuzzing: `Fuzz/` package + `scripts/fuzz.sh` (libFuzzer, ASan, 64 KB
+  inputs as sigstore-go), CI job 30 s/target per push and 15 min/target
+  weekly; failing inputs are uploaded as artifacts.
 - `tuf.Client` is an actor; `Options` uses `with...` copies; the fetcher is
   async (`URLSession`) with up to 3 attempts on transport errors, 429 and
   5xx (sigstore-go uses an httpretry client). As go-tuf's fetcher, a

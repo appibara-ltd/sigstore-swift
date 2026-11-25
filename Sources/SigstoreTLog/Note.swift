@@ -6,7 +6,7 @@
 // - golang.org/x/mod v0.43.0 sumdb/note (`Open`, `VerifierList`);
 // - transparency-dev/formats v0.1.1 log (`ParseCheckpoint`,
 //   `Checkpoint.Unmarshal`).
-// ML-DSA note keys (cosignature/v1 framing) are not supported.
+// ML-DSA-44 note keys use rekor-tiles' cosignature/v1 framing.
 
 import Crypto
 import Foundation
@@ -30,8 +30,19 @@ public struct NoteVerifier: Sendable {
         self.verifier = verifier
     }
 
+    /// rekor-tiles `noteVerifier.verify`. For ML-DSA the signature is an
+    /// 8-byte big-endian timestamp followed by the ML-DSA signature over
+    /// `formatCosignatureV1(origin, timestamp, message)`.
     func verify(_ message: [UInt8], _ signature: [UInt8]) -> Bool {
-        verifier.verify(signature: signature, message: message)
+        guard case .mlDSA(let k) = verifier.key else {
+            return verifier.verify(signature: signature, message: message)
+        }
+        guard signature.count == 8 + k.parameterSet.signatureSize else { return false }
+        let timestamp = signature.prefix(8).reduce(UInt64(0)) { $0 << 8 | UInt64($1) }
+        guard let formatted = formatCosignatureV1(origin: name, timestamp: timestamp, message: message) else {
+            return false
+        }
+        return verifier.verify(signature: signature.dropFirst(8), message: formatted)
     }
 }
 
@@ -44,14 +55,37 @@ public func noteKeyHash(origin: String, verifier: SignatureVerifier) throws -> U
     switch verifier.key {
     case .ecdsaP256, .ecdsaP384, .ecdsaP521:
         digest = SHA256.hash(data: verifier.publicKey.pkixBytes)
-    case .ed25519(let k):
+    case .ed25519(let k), .ed25519ph(let k):  // KeyHash depends on the key type only
         digest = SHA256.hash(data: Array(origin.utf8) + [0x0A, 0x01] + Array(k.rawRepresentation))
     case .rsaPKCS1v15:
         digest = SHA256.hash(
             data: Array(origin.utf8) + [0x0A, 0xFF] + Array("PKIX-RSA-PKCS#1v1.5".utf8)
                 + Array(verifier.publicKey.pkixBytes))
+    case .mlDSA(let k):
+        // mldsaKeyHash: only ML-DSA-44; algorithm byte 6.
+        guard k.parameterSet == .mlDSA44 else {
+            throw SigstoreError("unsupported ML-DSA parameter set \(k.parameterSet), only ML-DSA-44 is supported")
+        }
+        digest = SHA256.hash(data: Array(origin.utf8) + [0x0A, 0x06] + Array(k.rawRepresentation))
     }
     return digest.prefix(4).reduce(UInt32(0)) { $0 << 8 | UInt32($1) }
+}
+
+/// rekor-tiles `formatCosignatureV1`: the C2SP tlog-cosignature
+/// "subtree/v1" message for a checkpoint (`msg` must be exactly a checkpoint
+/// body with a 32-byte root hash and no extension lines). Nil on error.
+func formatCosignatureV1(origin: String, timestamp: UInt64, message: [UInt8]) -> [UInt8]? {
+    let text = String(decoding: message, as: UTF8.self)
+    guard let cp = try? LogCheckpoint(text: text) else { return nil }
+    let lines = text.split(separator: "\n", maxSplits: 3, omittingEmptySubsequences: false)
+    guard lines.count == 4, lines[3].isEmpty else { return nil }  // no trailing data
+    guard cp.hash.count == 32 else { return nil }
+    let o = Array(origin.utf8)
+    let co = Array(cp.origin.utf8)
+    guard o.count <= 255, co.count <= 255 else { return nil }  // uint8 length prefixes
+    func u64(_ v: UInt64) -> [UInt8] { (0..<8).map { UInt8(truncatingIfNeeded: v >> (56 - 8 * UInt64($0))) } }
+    return Array("subtree/v1\n\u{0}".utf8) + [UInt8(o.count)] + o + u64(timestamp) + [UInt8(co.count)] + co
+        + u64(0) + u64(cp.size) + cp.hash
 }
 
 /// sumdb `isValidName`.

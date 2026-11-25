@@ -2,3 +2,4 @@
 # never convert their line endings (Windows checkouts use core.autocrlf).
 Tests/SigstoreTests/Fixtures/** -text
 Sources/**/Resources/** -text
+Tests/*/Vectors/** -text

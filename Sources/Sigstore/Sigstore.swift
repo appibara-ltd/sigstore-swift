@@ -2,7 +2,9 @@
 
 @_exported import SigstoreBundle
 @_exported import SigstoreCommon
+@_exported import SigstoreCryptoExtras
 @_exported import SigstoreFulcio
+@_exported import SigstoreMLDSA
 @_exported import SigstoreProtobufSpecs
 @_exported import SigstoreRoot
 @_exported import SigstoreTLog

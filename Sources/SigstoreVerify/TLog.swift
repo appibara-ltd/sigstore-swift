@@ -191,10 +191,10 @@ func reconstructV2EntryHash(
     _ sigContent: any SignatureContent, _ verificationContent: any VerificationContent,
     trustedMaterial: any TrustedMaterial, entitySignature: Data
 ) throws -> [UInt8] {
-    let key: Certificate.PublicKey
+    let key: SigstorePublicKey
     var verifierProto = Dev_Sigstore_Rekor_V2_Verifier()
     if let leaf = verificationContent.certificate {
-        key = leaf.publicKey
+        key = .x509(leaf.publicKey)
         var cert = Dev_Sigstore_Common_V1_X509Certificate()
         var der = DER.Serializer()
         try der.serialize(leaf)  // re-emits the parsed raw TBS/signature bytes
@@ -251,19 +251,25 @@ func reconstructV2EntryHash(
 
 /// Mirrors sigstore `signature.GetDefaultPublicKeyDetails` (no RSA-PSS).
 func defaultPublicKeyDetails(
-    _ key: Certificate.PublicKey, ed25519ph: Bool
+    _ key: SigstorePublicKey, ed25519ph: Bool
 ) throws -> Dev_Sigstore_Common_V1_PublicKeyDetails {
     switch try SignatureVerifier(publicKey: key).key {
     case .ecdsaP256: return .pkixEcdsaP256Sha256
     case .ecdsaP384: return .pkixEcdsaP384Sha384
     case .ecdsaP521: return .pkixEcdsaP521Sha512
-    case .ed25519: return ed25519ph ? .pkixEd25519Ph : .pkixEd25519
+    case .ed25519, .ed25519ph: return ed25519ph ? .pkixEd25519Ph : .pkixEd25519
     case .rsaPKCS1v15(let k):
         switch k.keySizeInBits {
         case 2048: return .pkixRsaPkcs1V152048Sha256
         case 3072: return .pkixRsaPkcs1V153072Sha256
         case 4096: return .pkixRsaPkcs1V154096Sha256
         default: throw SigstoreError("unsupported public key type")
+        }
+    case .mlDSA(let k):
+        switch k.parameterSet {
+        case .mlDSA44: return .mlDsa44
+        case .mlDSA65: return .mlDsa65
+        case .mlDSA87: return .mlDsa87
         }
     }
 }

@@ -16,7 +16,7 @@ public struct NilValueError: Error, CustomStringConvertible, Sendable {
 /// `*x509.Certificate` or a `crypto.PublicKey`).
 public enum EntryPublicKey: Sendable {
     case certificate(Certificate)
-    case publicKey(Certificate.PublicKey)
+    case publicKey(SigstorePublicKey)
 }
 
 /// Decoded Rekor v1 entry bodies sigstore-go accepts (`ValidateEntry`).
@@ -96,7 +96,7 @@ public struct Entry: Sendable {
         if let cert = try? Certificate(derEncoded: der) {
             return .certificate(cert)
         }
-        if let key = try? Certificate.PublicKey(derEncoded: der) {
+        if let key = try? SigstorePublicKey(spki: der) {
             return .publicKey(key)
         }
         return nil

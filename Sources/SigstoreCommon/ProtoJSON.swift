@@ -14,9 +14,10 @@ import Foundation
 
 public enum ProtoJSON {
     /// JSON names (and proto names) of the `bytes` fields reachable from
-    /// `Bundle`, `TrustedRoot` and the Rekor v2 `Entry` (protobuf-specs
-    /// a84bc5ff572a, rekor-tiles v2.4.2). No string field in those protos
-    /// uses any of these names.
+    /// `Bundle` (v1 and v2), `TrustedRoot`, the Rekor v2 `Entry` and the
+    /// in-toto `Statement` (protobuf-specs a84bc5ff572a, rekor-tiles v2.4.2,
+    /// in-toto/attestation v1.2.0). No string field in those protos uses
+    /// any of these names.
     public static let bytesFieldNames: Set<String> = [
         "rawBytes", "raw_bytes",
         "keyId", "key_id",
@@ -30,7 +31,13 @@ public enum ProtoJSON {
         "payload",
         "sig",
         "content",
+        "proof",
     ]
+
+    /// Fields holding free-form JSON (`google.protobuf.Struct`: the in-toto
+    /// `predicate` and `annotations`). Their contents are not proto fields,
+    /// so they are never treated as bytes.
+    public static let freeFormFieldNames: Set<String> = ["predicate", "annotations"]
 
     /// Re-encodes every string (or array of strings) under a `bytesFieldNames`
     /// key using Go protojson's base64 rules. Duplicate keys are rejected,
@@ -46,6 +53,7 @@ public enum ProtoJSON {
     }
 
     private static func normalize(_ value: JSONValue, key: String?) throws -> JSONValue {
+        if let key, freeFormFieldNames.contains(key) { return value }
         switch value {
         case .object(let o):
             var out: [String: JSONValue] = [:]

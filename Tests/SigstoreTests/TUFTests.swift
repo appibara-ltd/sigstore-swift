@@ -495,7 +495,8 @@ struct TUFTests {
         let cases: [(String, String, Bool)] = [
             ("a/b.json", "a/*.json", true), ("a/b/c.json", "a/*.json", false), ("ab", "a?", true),
             ("ab", "a[a-c]", true), ("ad", "a[^a-c]", true), ("ab", "a[^a-c]", false), ("a*", "a\\*", true),
-            ("ab", "a\\*", false), ("x", "[", false),
+            ("ab", "a\\*", false), ("x", "[", false), ("a", "a[", false), ("ab", "*b", true), ("é", "?", true),
+            ("b", "[a-c]", true), ("-", "[-]", false), ("x", "a\\", false),
         ]
         for (target, pattern, expected) in cases {
             let role = try! DelegatedRole(
@@ -505,6 +506,19 @@ struct TUFTests {
                 ]))
             #expect(role.isDelegatedPath(target) == expected, "\(target) ~ \(pattern)")
         }
+    }
+
+    /// Go's path.Match is polynomial: star-heavy patterns from signed
+    /// delegation metadata must not take exponential time.
+    @Test func pathMatchingIsNotExponential() throws {
+        let pattern = String(repeating: "a*", count: 40) + "b"
+        let target = String(repeating: "a", count: 200)
+        let role = try DelegatedRole(
+            JSONValue.object(["name": .string("r"), "keyids": .array([]), "threshold": .number("1"),
+                "paths": .array([.string(pattern)])]))
+        let start = Date()
+        #expect(!role.isDelegatedPath(target))
+        #expect(Date().timeIntervalSince(start) < 1)
     }
 
     @Test func succinctRoleBins() throws {

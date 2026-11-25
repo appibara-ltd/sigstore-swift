@@ -1,0 +1,70 @@
+{
+  "mediaType": "application/vnd.dev.sigstore.verificationresult+json;version=0.1",
+  "signature": {
+    "certificate": {
+      "certificateIssuer": "CN=Fulcio Intermediate l1,O=GitHub\\, Inc.",
+      "subjectAlternativeName": "https://dotcom.releases.github.com"
+    }
+  },
+  "verifiedTimestamps": [
+    {
+      "type": "TimestampAuthority",
+      "uri": "timestamp.githubapp.com",
+      "timestamp": "2026-11-24T17:52:45Z"
+    }
+  ],
+  "verifiedIdentity": {
+    "subjectAlternativeName": {
+      "subjectAlternativeName": "https://dotcom.releases.github.com"
+    },
+    "issuer": {
+      "issuer": "",
+      "regexp": ".*"
+    }
+  },
+  "statement": {
+    "_type": "https://in-toto.io/Statement/v1",
+    "subject": [
+      {
+        "uri": "pkg:github/appibara-ltd/appitool@v0.11.0",
+        "digest": {
+          "sha1": "69945c53a555635a35d1ebaba9eab6a6695b4e4d"
+        }
+      },
+      {
+        "name": "appitool-darwin-arm64.tar.gz",
+        "digest": {
+          "sha256": "b5eeec2e36db5cfbdda72707ac80b3c807cab76631a35cf618739e29d331f0ce"
+        }
+      },
+      {
+        "name": "appitool-linux-arm64.tar.gz",
+        "digest": {
+          "sha256": "a95fc439427d1deacd7a9785aee6e11b45f16d0840946b4c361e1eba639fda89"
+        }
+      },
+      {
+        "name": "appitool-linux-x86_64.tar.gz",
+        "digest": {
+          "sha256": "3c9f9e92aa24083f6e99b5789d7004f647752627b17e327c56cf11fcfbe0ac3c"
+        }
+      },
+      {
+        "name": "checksums.txt",
+        "digest": {
+          "sha256": "d8dcf19733fbedfae9e5b9f00b039fd41b2cf1d9a5a24b2b14db231619919978"
+        }
+      }
+    ],
+    "predicateType": "https://in-toto.io/attestation/release/v0.2",
+    "predicate": {
+      "databaseId": "457131803",
+      "ownerId": "232390725",
+      "packageId": "1389006729",
+      "purl": "pkg:github/appibara-ltd/appitool@v0.11.0",
+      "repository": "appibara-ltd/appitool",
+      "repositoryId": "1389006729",
+      "tag": "v0.11.0"
+    }
+  }
+}

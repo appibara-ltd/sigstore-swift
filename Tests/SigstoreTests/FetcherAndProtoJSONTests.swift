@@ -188,6 +188,14 @@ struct ProtoJSONTests {
         #expect { try SigstoreBundle.Bundle(json: Data(json.utf8)) } throws: { "\($0)".contains("duplicate field") }
     }
 
+    /// Struct-valued fields are free-form JSON: a predicate may use any key,
+    /// including names of bytes fields elsewhere, with non-base64 values.
+    @Test func freeFormPredicateIsNotTreatedAsBytes() throws {
+        let json = #"{"_type":"https://in-toto.io/Statement/v1","subject":[{"name":"a","digest":{"sha256":"ab"}}],"predicateType":"x","predicate":{"content":"not base64!","signature":"x y z","nested":{"digest":"sha256:ab"}}}"#
+        let statement = try Statement(json: Data(json.utf8))
+        #expect(statement.predicate?.fields["content"]?.stringValue == "not base64!")
+    }
+
     @Test func stringFieldsAreNotTouched() throws {
         let input = #"{"envelope":"a\nb","hint":"x-y","sig":"QUJD\nRA=="}"#
         // `sig` is a bytes field (here invalid per Go); the others are strings.

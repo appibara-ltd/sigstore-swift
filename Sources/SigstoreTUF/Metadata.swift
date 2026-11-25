@@ -5,6 +5,7 @@
 import Crypto
 import Foundation
 import SigstoreCommon
+import SigstoreCryptoExtras
 import X509
 import _CryptoExtras
 
@@ -204,7 +205,8 @@ public struct TUFKey: Sendable {
         case Self.typeRSASSAPSSSHA256:
             let key = try Certificate.PublicKey(pemEncoded: publicKey)
             guard let rsa = _RSA.Signing.PublicKey(key) else { throw TUFError.type("invalid rsa public key") }
-            return TUFKeyVerifier(fingerprint: Array(SHA256.hash(data: key.pkixBytes)), kind: .rsaPSS(rsa))
+            let components = try RSAPublicKeyComponents(pkcs1DER: rsa.pkcs1DERRepresentation)
+            return TUFKeyVerifier(fingerprint: Array(SHA256.hash(data: key.pkixBytes)), kind: .rsaPSS(components))
         case Self.typeECDSAP256, Self.typeECDSAP256Compat:
             let key = try Certificate.PublicKey(pemEncoded: publicKey)
             let hash: HashFunc = scheme == Self.schemeECDSAP384 ? .sha384 : .sha256
@@ -230,7 +232,7 @@ public struct TUFKey: Sendable {
 struct TUFKeyVerifier {
     enum Kind {
         case standard(SignatureVerifier)
-        case rsaPSS(_RSA.Signing.PublicKey)
+        case rsaPSS(RSAPublicKeyComponents)
     }
     /// SHA-256 of the PKIX public key: threshold counts distinct keys.
     var fingerprint: [UInt8]
@@ -241,9 +243,10 @@ struct TUFKeyVerifier {
         case .standard(let v):
             return v.verify(signature: signature, message: payload)
         case .rsaPSS(let k):
-            return k.isValidSignature(
-                _RSA.Signing.RSASignature(rawRepresentation: signature), for: SHA256.hash(data: payload),
-                padding: .PSS)
+            // go-tuf: rsa.VerifyPSS(SHA-256, PSSOptions{Hash: SHA256}): salt
+            // length 0 means auto-detect.
+            return RSADigestVerifier.isValidPSS(
+                signature, digest: Array(SHA256.hash(data: payload)), hash: .sha256, key: k, saltLength: nil)
         }
     }
 }
@@ -433,79 +436,177 @@ public struct Delegations: Sendable {
 }
 
 /// go-tuf `isTargetInPathPattern`: same number of `/`-separated segments,
-/// each matching with `filepath.Match` (Unix semantics).
+/// each matching with `filepath.Match` (a malformed pattern never matches,
+/// as go-tuf ignores the error).
 func isTargetInPathPattern(_ target: String, _ pattern: String) -> Bool {
     let t = target.split(separator: "/", omittingEmptySubsequences: false)
     let p = pattern.split(separator: "/", omittingEmptySubsequences: false)
     guard t.count == p.count else { return false }
-    return zip(p, t).allSatisfy { globMatch(Array($0.unicodeScalars), Array($1.unicodeScalars)) }
+    return zip(p, t).allSatisfy { goPathMatch(Array($0.utf8), Array($1.utf8)) == true }
 }
 
-/// `path.Match` for a single segment: `*`, `?`, `[...]` (with `^`
-/// negation and ranges) and `\` escapes. A malformed pattern never matches.
-func globMatch(_ pattern: [Unicode.Scalar], _ name: [Unicode.Scalar]) -> Bool {
-    func matchClass(_ p: [Unicode.Scalar], _ i: inout Int, _ c: Unicode.Scalar) -> Bool? {
-        // p[i] is just past "[".
-        var negated = false
-        if i < p.count, p[i] == "^" { negated = true; i += 1 }
-        var matched = false
-        var first = true
-        while true {
-            guard i < p.count else { return nil }
-            if p[i] == "]" && !first { i += 1; break }
-            first = false
-            var lo = p[i]
-            if lo == "\\" { i += 1; guard i < p.count else { return nil }; lo = p[i] }
-            i += 1
-            var hi = lo
-            if i + 1 < p.count, p[i] == "-", p[i + 1] != "]" {
-                i += 1
-                hi = p[i]
-                if hi == "\\" { i += 1; guard i < p.count else { return nil }; hi = p[i] }
-                i += 1
-            }
-            if lo.value <= c.value && c.value <= hi.value { matched = true }
+/// Port of Go's `path.Match` (go1.27 src/path/match.go): returns nil for a
+/// malformed pattern (`ErrBadPattern`). Byte-oriented like Go, decoding
+/// UTF-8 runes for `?` and character classes. Runs in polynomial time: only
+/// the last star backtracks.
+func goPathMatch(_ patternIn: [UInt8], _ nameIn: [UInt8]) -> Bool? {
+    var pattern = patternIn[...]
+    var name = nameIn[...]
+    let slash = UInt8(ascii: "/")
+    patternLoop: while !pattern.isEmpty {
+        let (star, chunk, rest) = scanChunk(pattern)
+        pattern = rest
+        if star && chunk.isEmpty {
+            return !name.contains(slash)  // trailing * matches the rest without '/'
         }
-        return matched != negated
-    }
-    func match(_ pi: Int, _ ni: Int) -> Bool {
-        var pi = pi
-        var ni = ni
-        while pi < pattern.count {
-            switch pattern[pi] {
-            case "*":
-                while pi < pattern.count, pattern[pi] == "*" { pi += 1 }
-                if pi == pattern.count { return true }
-                var k = ni
-                while k <= name.count {
-                    if match(pi, k) { return true }
-                    k += 1
+        let (t, ok, bad) = matchChunk(chunk, name)
+        if ok && (t.isEmpty || !pattern.isEmpty) {
+            name = t
+            continue
+        }
+        if bad { return nil }
+        if star {
+            var i = name.startIndex
+            while i < name.endIndex && name[i] != slash {
+                let (t, ok, bad) = matchChunk(chunk, name[(i + 1)...])
+                if ok {
+                    // The last chunk must consume the whole name.
+                    if pattern.isEmpty && !t.isEmpty {
+                        i += 1
+                        continue
+                    }
+                    name = t
+                    continue patternLoop
                 }
-                return false
-            case "?":
-                guard ni < name.count else { return false }
-                pi += 1
-                ni += 1
-            case "[":
-                guard ni < name.count else { return false }
-                var i = pi + 1
-                guard let ok = matchClass(pattern, &i, name[ni]), ok else { return false }
-                pi = i
-                ni += 1
-            case "\\":
-                pi += 1
-                guard pi < pattern.count, ni < name.count, pattern[pi] == name[ni] else { return false }
-                pi += 1
-                ni += 1
-            default:
-                guard ni < name.count, pattern[pi] == name[ni] else { return false }
-                pi += 1
-                ni += 1
+                if bad { return nil }
+                i += 1
             }
         }
-        return ni == name.count
+        // Report malformed patterns even after a mismatch, as Go does.
+        while !pattern.isEmpty {
+            let (_, chunk, rest) = scanChunk(pattern)
+            pattern = rest
+            if matchChunk(chunk, [][...]).bad { return nil }
+        }
+        return false
     }
-    return match(0, 0)
+    return name.isEmpty
+}
+
+private func scanChunk(_ p: ArraySlice<UInt8>) -> (star: Bool, chunk: ArraySlice<UInt8>, rest: ArraySlice<UInt8>) {
+    var pattern = p
+    var star = false
+    while let f = pattern.first, f == UInt8(ascii: "*") {
+        pattern = pattern.dropFirst()
+        star = true
+    }
+    var inRange = false
+    var i = pattern.startIndex
+    while i < pattern.endIndex {
+        switch pattern[i] {
+        case UInt8(ascii: "\\"):
+            if i + 1 < pattern.endIndex { i += 1 }
+        case UInt8(ascii: "["): inRange = true
+        case UInt8(ascii: "]"): inRange = false
+        case UInt8(ascii: "*"):
+            if !inRange { return (star, pattern[..<i], pattern[i...]) }
+        default: break
+        }
+        i += 1
+    }
+    return (star, pattern, [][...])
+}
+
+/// Decodes one UTF-8 rune (Go `utf8.DecodeRune`): (0xFFFD, 1) when invalid.
+private func decodeRune(_ s: ArraySlice<UInt8>) -> (UInt32, Int) {
+    guard let b0 = s.first else { return (0xFFFD, 0) }
+    if b0 < 0x80 { return (UInt32(b0), 1) }
+    let len = b0 >= 0xF0 ? 4 : b0 >= 0xE0 ? 3 : b0 >= 0xC0 ? 2 : 0
+    guard len > 0, s.count >= len,
+        let scalar = String(bytes: s.prefix(len), encoding: .utf8)?.unicodeScalars.first,
+        scalar.utf8.count == len
+    else { return (0xFFFD, 1) }
+    return (scalar.value, len)
+}
+
+/// Go `getEsc`: one possibly escaped rune of a character class.
+private func getEsc(_ c: ArraySlice<UInt8>) -> (UInt32, ArraySlice<UInt8>)? {
+    var chunk = c
+    guard let f = chunk.first, f != UInt8(ascii: "-"), f != UInt8(ascii: "]") else { return nil }
+    if f == UInt8(ascii: "\\") {
+        chunk = chunk.dropFirst()
+        if chunk.isEmpty { return nil }
+    }
+    let (r, n) = decodeRune(chunk)
+    if r == 0xFFFD && n == 1 { return nil }
+    let next = chunk.dropFirst(n)
+    if next.isEmpty { return nil }
+    return (r, next)
+}
+
+/// Go `matchChunk`: (rest, ok, badPattern).
+private func matchChunk(_ c: ArraySlice<UInt8>, _ str: ArraySlice<UInt8>) -> (ArraySlice<UInt8>, Bool, bad: Bool) {
+    var chunk = c
+    var s = str
+    var failed = false
+    while let head = chunk.first {
+        failed = failed || s.isEmpty
+        switch head {
+        case UInt8(ascii: "["):
+            var r: UInt32 = 0
+            if !failed {
+                let (rr, n) = decodeRune(s)
+                r = rr
+                s = s.dropFirst(n)
+            }
+            chunk = chunk.dropFirst()
+            var negated = false
+            if chunk.first == UInt8(ascii: "^") {
+                negated = true
+                chunk = chunk.dropFirst()
+            }
+            var match = false
+            var nrange = 0
+            while true {
+                if chunk.first == UInt8(ascii: "]") && nrange > 0 {
+                    chunk = chunk.dropFirst()
+                    break
+                }
+                guard let (lo, afterLo) = getEsc(chunk) else { return ([][...], false, true) }
+                chunk = afterLo
+                var hi = lo
+                if chunk.first == UInt8(ascii: "-") {
+                    guard let (h, afterHi) = getEsc(chunk.dropFirst()) else { return ([][...], false, true) }
+                    hi = h
+                    chunk = afterHi
+                }
+                match = match || (lo <= r && r <= hi)
+                nrange += 1
+            }
+            failed = failed || match == negated
+        case UInt8(ascii: "?"):
+            if !failed {
+                failed = s.first == UInt8(ascii: "/")
+                s = s.dropFirst(decodeRune(s).1)
+            }
+            chunk = chunk.dropFirst()
+        case UInt8(ascii: "\\"):
+            chunk = chunk.dropFirst()
+            guard let lit = chunk.first else { return ([][...], false, true) }
+            if !failed {
+                failed = lit != s.first
+                s = s.dropFirst()
+            }
+            chunk = chunk.dropFirst()
+        default:
+            if !failed {
+                failed = head != s.first
+                s = s.dropFirst()
+            }
+            chunk = chunk.dropFirst()
+        }
+    }
+    return failed ? ([][...], false, false) : (s, true, false)
 }
 
 // MARK: - Signed metadata

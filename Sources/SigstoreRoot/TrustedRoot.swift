@@ -18,8 +18,9 @@ public struct TransparencyLog: Sendable {
     public var validityPeriodEnd: Date?
     /// Hash used by the log's Merkle tree.
     public var hashFunc: HashFunc
-    public var publicKey: Certificate.PublicKey
-    /// Hash used when verifying signatures made by `publicKey`.
+    public var publicKey: SigstorePublicKey
+    /// Hash used when verifying signatures made by `publicKey` (unused for
+    /// ML-DSA, which signs the message: Go `crypto.Hash(0)`).
     public var signatureHashFunc: HashFunc
 
     public init(
@@ -28,7 +29,7 @@ public struct TransparencyLog: Sendable {
         validityPeriodStart: Date?,
         validityPeriodEnd: Date?,
         hashFunc: HashFunc,
-        publicKey: Certificate.PublicKey,
+        publicKey: SigstorePublicKey,
         signatureHashFunc: HashFunc
     ) {
         self.baseURL = baseURL
@@ -130,34 +131,44 @@ public func parseTransparencyLogs(
                 throw SigstoreError("failed to parse public key for tlog: \(tlog.baseURL)", underlying: error)
             }
         }
-        let key: Certificate.PublicKey
+        let key: SigstorePublicKey
         switch tlog.publicKey.keyDetails {
         case .pkixEcdsaP256Sha256, .pkixEcdsaP384Sha384, .pkixEcdsaP521Sha512:
-            key = try parse()
+            key = .x509(try parse())
             let v = try SignatureVerifier(publicKey: key)
             switch v.key {
             case .ecdsaP256, .ecdsaP384, .ecdsaP521: break
             default: throw SigstoreError("tlog public key is not ECDSA: \(tlog.publicKey.keyDetails)")
             }
         case .pkixRsaPkcs1V152048Sha256, .pkixRsaPkcs1V153072Sha256, .pkixRsaPkcs1V154096Sha256:
-            key = try parse()
+            key = .x509(try parse())
             guard case .rsaPKCS1v15 = try SignatureVerifier(publicKey: key).key else {
                 throw SigstoreError("tlog public key is not RSA: \(tlog.publicKey.keyDetails)")
             }
         case .pkixEd25519:
-            key = try parse()
+            key = .x509(try parse())
             guard try SignatureVerifier(publicKey: key).isEd25519 else {
                 throw SigstoreError("tlog public key is not Ed25519: \(tlog.publicKey.keyDetails)")
             }
         case .pkcs1RsaPkcs1V5:
             // Deprecated raw PKCS#1 RSAPublicKey (Go x509.ParsePKCS1PublicKey).
             do {
-                key = Certificate.PublicKey(try _RSA.Signing.PublicKey(derRepresentation: raw))
+                key = .x509(Certificate.PublicKey(try _RSA.Signing.PublicKey(derRepresentation: raw)))
             } catch {
                 throw SigstoreError("failed to parse public key for tlog: \(tlog.baseURL)", underlying: error)
             }
+        case .mlDsa44:
+            let parsed: SigstorePublicKey
+            do {
+                parsed = try SigstorePublicKey(spki: raw)
+            } catch {
+                throw SigstoreError("failed to parse public key for tlog: \(tlog.baseURL)", underlying: error)
+            }
+            guard case .mlDSA(let k) = parsed, k.parameterSet == .mlDSA44 else {
+                throw SigstoreError("tlog public key is not ML-DSA-44: \(tlog.publicKey.keyDetails)")
+            }
+            key = parsed
         default:
-            // TODO: ML_DSA_44 as in sigstore-go.
             throw SigstoreError("unsupported tlog public key type: \(tlog.publicKey.keyDetails)")
         }
 
@@ -176,7 +187,7 @@ public func parseTransparencyLogs(
             validityPeriodEnd: validFor.hasEnd ? validFor.end.date : nil,
             hashFunc: .sha256,
             publicKey: key,
-            signatureHashFunc: SignatureVerifier.defaultHashFunc(for: key)
+            signatureHashFunc: key.x509.map(SignatureVerifier.defaultHashFunc(for:)) ?? .sha256
         )
     }
     return out
