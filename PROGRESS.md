@@ -2,10 +2,38 @@
 
 Continuity log. Update at the end of every session.
 
-## Status (2026-11-25, session 1)
+## Status (2026-11-25, session 1, part 2)
 
-**v0.1 milestone reached locally (not yet committed).** `swift build` and
-`swift test` pass on macOS (Swift 6.4, 28 tests). Linux not yet tested.
+**v0.1 is on `main` (9c0941d). Conformance harness added (uncommitted).**
+`swift build` / `swift test` pass on macOS (Swift 6.4, 29 tests). Linux is
+first exercised by `.github/workflows/ci.yml` (not yet run).
+
+### Conformance (sigstore-conformance, verify tests only)
+
+Run locally with `scripts/run-conformance.sh` (needs `uv`); CI runs the
+`conformance` job in `.github/workflows/ci.yml`. Client:
+`Sources/sigstore-swift-conformance` (port of sigstore-go
+`test/conformance/main.go`, verify-bundle only).
+
+| Suite ref | Passed | Expected failures | Unexpected | CPython release bundles |
+| --- | --- | --- | --- | --- |
+| v0.0.29 (CI pin) | 109 | 26 | 0 | 81/81 |
+| main e275ffb | 113 | 28 | 0 | 81/81 |
+
+Expected failures (`.github/conformance-xfail.txt`, strict) are all happy
+paths needing Rekor v2 or RFC 3161. Every `_fail` case is rejected, but
+these are rejected only because Rekor v2 is unsupported, not for the defect
+they target, so they prove nothing yet: all `rekor2-*_fail` and
+`trust-root-tlog-missing-validity-start_fail`. Same for
+`intoto-tsa-timestamp-outside-cert-validity_fail` (rejected because RFC 3161
+is unimplemented). Re-check their rejection reasons when those features land
+(`scripts/run-conformance.sh -rA`, or run the client on the asset dir).
+
+When no `--trusted-root` is given, the client uses the embedded public-good
+root, or with `--staging` an embedded staging root
+(`Sources/sigstore-swift-conformance/Resources/staging_trusted_root.json`,
+`sigstore/root-signing-staging` `targets/trusted_root.json` @ main, sha256
+`44deb991…6ed8`, fetched 2026-11-25). sigstore-go fetches both via TUF.
 
 The appitool v0.11.0 SLSA provenance bundle (`appitool-darwin-arm64.tar.gz`,
 sha256 `b5eeec2e…f0ce`) verifies against the embedded public-good trusted root
@@ -29,6 +57,7 @@ and a policy of artifact digest + OIDC issuer
   OtherName), `CertificateIdentity` matching (exact/regex SAN and issuer,
   extension equality).
 - Embedded SCTs (RFC 6962 precert entry, CT log `validFor`, threshold).
+- Trusted-root tlog keys: ECDSA, Ed25519, RSA (PKIX and raw PKCS#1).
 - Rekor v1 entries (`dsse` 0.0.1, `hashedrekord` 0.0.1, `intoto` 0.0.2):
   RFC 6962 Merkle inclusion proof, signed checkpoint (key hint + signature +
   root-hash match), SET over JCS payload with log `validFor`, entry
@@ -43,8 +72,9 @@ and a policy of artifact digest + OIDC issuer
   unverified; `.withSignedTimestamps` therefore always fails).
 - Rekor v2 entries / signed-note checkpoints (throws "not supported yet").
 - TUF client (`SigstoreTUF` holds only `Options`); trusted root is embedded.
-- Message-signature verification against a digest only (needs prehashed
-  ECDSA/RSA); Ed25519ph; ML-DSA and raw PKCS#1 tlog keys.
+- Message signatures over a digest only: ECDSA done (prehashed `Digest`
+  wrapper); RSA not (swift-crypto RSA rejects foreign digest types).
+  Ed25519ph; ML-DSA tlog keys.
 - `IdentityVerifier` / `VerifiableEntity` / bundle v2, `SigningConfig`,
   `LiveTrustedRoot`, `VerificationResult` JSON encoding.
 
@@ -65,11 +95,9 @@ sha256 `6494e21e…0b66`, fetched 2026-11-25.
 
 ## Next steps (toward conformance)
 
-1. **sigstore-conformance harness**: a small `sigstore-swift-conformance` CLI
-   target implementing the conformance client interface (`verify-bundle`
-   with `--bundle`, `--certificate-identity`, `--certificate-oidc-issuer`,
-   `--trusted-root`, artifact/digest); run the suite in CI with signing tests
-   marked xfail. Triage failures into the items below.
+1. **First CI run**: push and fix whatever Linux / the GitHub action reveal
+   (Linux build is untested; the conformance job builds with
+   `--static-swift-stdlib` in `swift:6.4-noble` and runs on the host).
 2. **RFC 3161 / TSA** (sigstore-go `pkg/verify/tsa.go`, `root/timestamping_authority.go`):
    parse TimeStampResp/TSTInfo (CMS SignedData) with swift-asn1, verify the
    signer chain to the TSA root at genTime, message imprint = hash of the
@@ -115,6 +143,10 @@ sha256 `6494e21e…0b66`, fetched 2026-11-25.
 - Extra strictness vs Go: Merkle proof hashes must be 32 bytes; Rekor v1
   body hashes must have the algorithm's length.
 - `swift-crypto` range `3.12.0..<6.0.0` (resolves to 5.2.0).
+- Conformance CI is pinned to sigstore-conformance v0.0.29 (as sigstore-go);
+  verify tests only (`skip-signing`), no staging run until signing exists.
+- Rekor v1 `intoto` 0.0.2 signatures decode leniently like Go (bad inner
+  base64 → empty signature → "signature does not match"), not at parse time.
 
 ## Spec questions
 

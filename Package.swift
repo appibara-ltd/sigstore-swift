@@ -5,6 +5,7 @@ let package = Package(
     name: "sigstore-swift",
     platforms: [.macOS(.v13)],
     products: [
+        .executable(name: "sigstore-swift-conformance", targets: ["sigstore-swift-conformance"]),
         .library(name: "Sigstore", targets: ["Sigstore"]),
         .library(name: "SigstoreBundle", targets: ["SigstoreBundle"]),
         .library(name: "SigstoreRoot", targets: ["SigstoreRoot"]),
@@ -52,6 +53,7 @@ let package = Package(
                 "SigstoreProtobufSpecs",
                 "SigstoreCommon",
                 .product(name: "Crypto", package: "swift-crypto"),
+                .product(name: "_CryptoExtras", package: "swift-crypto"),
                 .product(name: "X509", package: "swift-certificates"),
             ],
             resources: [.copy("Resources/trusted_root.json")]
@@ -110,9 +112,22 @@ let package = Package(
                 "SigstoreVerify",
             ]
         ),
+        // sigstore-conformance client (verify only). Not a library product.
+        .executableTarget(
+            name: "sigstore-swift-conformance",
+            dependencies: [
+                "Sigstore",
+                .product(name: "X509", package: "swift-certificates"),
+            ],
+            resources: [.copy("Resources/staging_trusted_root.json")]
+        ),
         .testTarget(
             name: "SigstoreTests",
-            dependencies: ["Sigstore"],
+            dependencies: [
+                "Sigstore",
+                .product(name: "Crypto", package: "swift-crypto"),
+                .product(name: "X509", package: "swift-certificates"),
+            ],
             resources: [.copy("Fixtures")]
         ),
     ]

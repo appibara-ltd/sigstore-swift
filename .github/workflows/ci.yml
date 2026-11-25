@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test-linux:
+    runs-on: ubuntu-24.04
+    container: swift:6.4-noble
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: swift build
+      - run: swift test
+
+  test-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: swift --version
+      - run: swift test
+
+  conformance:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Static stdlib so the binary runs on the host outside the container.
+      - name: Build conformance client
+        run: >
+          docker run --rm -v "$PWD:/src" -w /src swift:6.4-noble
+          swift build -c release --product sigstore-swift-conformance --static-swift-stdlib
+
+      - name: Read expected failures
+        id: xfail
+        run: echo "list=$(grep -v '^#' .github/conformance-xfail.txt | xargs)" >> "$GITHUB_OUTPUT"
+
+      # Verify-only client: signing tests are skipped, so a staging run
+      # (which only has signing tests) is omitted.
+      - uses: sigstore/sigstore-conformance@21533cde107c734ebc153c3e3a24d75fc9811a36 # v0.0.29
+        with:
+          entrypoint: ${{ github.workspace }}/.build/release/sigstore-swift-conformance
+          skip-signing: "true"
+          xfail: ${{ steps.xfail.outputs.list }}

@@ -1,6 +1,8 @@
+import Crypto
 import Foundation
 import Sigstore
 import Testing
+import X509
 
 @Suite struct UnitTests {
     @Test func dssePAE() {
@@ -82,5 +84,17 @@ import Testing
         }
         #expect(throws: (any Error).self) { try CertificateIdentity(issuer: "", sanValue: "x") }
         #expect(throws: (any Error).self) { try CertificateIdentity(issuer: "x", sanValue: "", sanRegex: "(") }
+    }
+
+    @Test func prehashedECDSAVerification() throws {
+        let key = P256.Signing.PrivateKey()
+        let message = Data("artifact".utf8)
+        let signature = try key.signature(for: message).derRepresentation
+        let verifier = try SignatureVerifier(publicKey: Certificate.PublicKey(key.publicKey))
+        let digest = Array(SHA256.hash(data: message))
+        #expect(try verifier.verify(signature: signature, digest: digest))
+        #expect(try !verifier.verify(signature: signature, digest: Array(SHA256.hash(data: Data("other".utf8)))))
+        // Digest length must match the verifier's hash (sigstore ComputeDigestForVerifying).
+        #expect(throws: (any Error).self) { try verifier.verify(signature: signature, digest: Array(digest.prefix(20))) }
     }
 }

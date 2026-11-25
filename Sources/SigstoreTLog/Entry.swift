@@ -60,7 +60,9 @@ public struct Entry: Sendable {
         switch rekorV1Entry {
         case .dsseV001(let e): return Base64.decode(e.signatures[0].signature) ?? Data()
         case .hashedRekordV001(let e): return e.signatureContent
-        case .intotoV002(let e): return Base64.decode(e.signatures[0].sig) ?? Data()
+        case .intotoV002(let e):
+            // Go: base64.StdEncoding.DecodeString(string(sig)); empty on failure.
+            return String(data: e.signatures[0].sig, encoding: .utf8).flatMap(Base64.decode) ?? Data()
         case nil: return Data()
         }
     }

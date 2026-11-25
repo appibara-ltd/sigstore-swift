@@ -1,6 +1,7 @@
 // Port of sigstore-go pkg/root/trusted_root.go (TUF-backed constructors and
 // LiveTrustedRoot are pending SigstoreTUF).
 
+import _CryptoExtras
 import Foundation
 import SigstoreCommon
 import SigstoreProtobufSpecs
@@ -158,8 +159,15 @@ public func parseTransparencyLogs(
             guard try SignatureVerifier(publicKey: key).isEd25519 else {
                 throw SigstoreError("tlog public key is not Ed25519: \(tlog.publicKey.keyDetails)")
             }
+        case .pkcs1RsaPkcs1V5:
+            // Deprecated raw PKCS#1 RSAPublicKey (Go x509.ParsePKCS1PublicKey).
+            do {
+                key = Certificate.PublicKey(try _RSA.Signing.PublicKey(derRepresentation: raw))
+            } catch {
+                throw SigstoreError("failed to parse public key for tlog: \(tlog.baseURL)", underlying: error)
+            }
         default:
-            // TODO: ML_DSA_44 and PKCS1_RSA_PKCS1V5 (raw PKCS#1) as in sigstore-go.
+            // TODO: ML_DSA_44 as in sigstore-go.
             throw SigstoreError("unsupported tlog public key type: \(tlog.publicKey.keyDetails)")
         }
 

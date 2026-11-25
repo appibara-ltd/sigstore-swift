@@ -22,6 +22,22 @@ struct CompatVerifier: Sendable {
     func verify(signature: Data, message: Data) -> Bool {
         verifiers.contains { $0.verify(signature: signature, message: message) }
     }
+
+    /// Prehashed variant: succeeds if any verifier accepts; if every verifier
+    /// rejected the digest outright (e.g. wrong length), rethrows the last error.
+    func verify(signature: Data, digest: [UInt8]) throws -> Bool {
+        var lastError: (any Error)?
+        for v in verifiers {
+            do {
+                if try v.verify(signature: signature, digest: digest) { return true }
+                lastError = nil
+            } catch {
+                lastError = error
+            }
+        }
+        if let lastError { throw lastError }
+        return false
+    }
 }
 
 /// Mirrors `VerifySignature`.
@@ -282,8 +298,19 @@ func verifyMessageSignatureWithArtifactDigest(
     if artifactDigest != msg.digest {
         throw SigstoreError("artifact does not match digest")
     }
-    // TODO: prehashed ECDSA/RSA verification (sigstore options.WithDigest).
-    throw SigstoreError("verifying message signatures against an artifact digest is not implemented yet")
+    if verifier.verifiers.contains(where: \.isEd25519) {
+        throw SigstoreError(
+            "message signatures with ed25519 signatures can only be verified with artifacts, and not just their digest")
+    }
+    let valid: Bool
+    do {
+        valid = try verifier.verify(signature: msg.signature, digest: Array(artifactDigest))
+    } catch {
+        throw error.wrapped("could not verify message")
+    }
+    guard valid else {
+        throw SigstoreError("could not verify message: invalid signature")
+    }
 }
 
 func limitSubjects(_ statement: Statement) throws {

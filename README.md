@@ -46,6 +46,16 @@ guard result.statement?.predicateType == "https://slsa.dev/provenance/v1" else {
 }
 ```
 
+## Conformance
+
+The `sigstore-swift-conformance` executable implements the verify half of the
+[sigstore-conformance](https://github.com/sigstore/sigstore-conformance) CLI
+protocol. Run the suite locally (needs `uv`):
+
+```bash
+scripts/run-conformance.sh
+```
+
 ## Regenerating protobuf types
 
 ```bash

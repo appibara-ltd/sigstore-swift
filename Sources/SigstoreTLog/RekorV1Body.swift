@@ -34,8 +34,9 @@ public struct HashedRekordV001: Sendable {
 /// `intoto` v0.0.2.
 public struct IntotoV002: Sendable {
     public struct Signature: Sendable {
-        /// Base64 signature (the JSON value is base64 of this string).
-        public var sig: String
+        /// The JSON value base64-decoded once. Rekor stores the DSSE
+        /// signature's base64 text here, so this is normally base64 again.
+        public var sig: Data
         public var publicKeyPEM: Data
     }
     public var signatures: [Signature]
@@ -136,11 +137,9 @@ struct RekorV1Body {
             let sigs = env["signatures"] as? [[String: Any]], !sigs.isEmpty
         else { throw Malformed(description: "intoto entry requires an envelope with signatures") }
         let signatures = try sigs.map { s -> IntotoV002.Signature in
-            let sigB64 = try base64Field(s["sig"], "intoto sig")
-            guard let sig = String(data: sigB64, encoding: .utf8) else {
-                throw Malformed(description: "intoto sig is not text")
-            }
-            return IntotoV002.Signature(sig: sig, publicKeyPEM: try base64Field(s["publicKey"], "intoto publicKey"))
+            IntotoV002.Signature(
+                sig: try base64Field(s["sig"], "intoto sig"),
+                publicKeyPEM: try base64Field(s["publicKey"], "intoto publicKey"))
         }
         let payloadHash = try hash(content["payloadHash"], allowed: ["sha256"])
         return IntotoV002(
