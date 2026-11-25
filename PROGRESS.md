@@ -169,6 +169,12 @@ sha256 `6494e21e…0b66`, fetched 2026-11-25.
   Swift 6.3 (macos-26 image, Xcode up to 26.6 as of 2026-11-17), so the
   macOS CI job installs Swift 6.4 with swiftly. Consequence: consumers on a
   release Xcode with Swift 6.3 cannot build the package.
+- CI `build` job mirrors sigstore-go `build.yml`: build + test on
+  `macos-latest`, `ubuntu-24.04` (`swift:6.4-noble` container) and
+  `windows-latest` (swift.org 6.4.3 via `compnerd/gha-setup-swift`),
+  `fail-fast: false`. Windows first added 2026-11-25; unverified until its
+  first run. TUF cache paths must stay portable when `SigstoreTUF` lands
+  (sigstore-go uses `filepath.Join`).
 - Conformance CI is pinned to sigstore-conformance v0.0.29 (as sigstore-go);
   verify tests only (`skip-signing`), no staging run until signing exists.
 - Rekor v1 `intoto` 0.0.2 signatures decode leniently like Go (bad inner

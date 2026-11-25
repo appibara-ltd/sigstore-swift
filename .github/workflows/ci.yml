@@ -11,26 +11,29 @@ permissions:
   contents: read
 
 jobs:
-  test-linux:
-    runs-on: ubuntu-24.04
-    container: swift:6.4-noble
+  # Mirrors sigstore-go .github/workflows/build.yml: one build/test job over
+  # macOS, Linux and Windows, fail-fast off. Conformance stays Linux-only.
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-24.04, windows-latest]
+        include:
+          - os: ubuntu-24.04
+            container: swift:6.4-noble
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: swift build
-      - run: swift test
 
-  test-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
       # The runner's Xcodes ship Swift 6.3; Package.swift needs tools 6.4.
       # Install the swift.org toolchain with swiftly
       # (https://www.swift.org/install/macos/).
       - name: Install Swift 6.4 (swiftly)
+        if: runner.os == 'macOS'
         run: |
           curl -fsSL -o "$RUNNER_TEMP/swiftly.pkg" https://download.swift.org/swiftly/darwin/swiftly.pkg
           installer -pkg "$RUNNER_TEMP/swiftly.pkg" -target CurrentUserHomeDirectory
@@ -43,8 +46,20 @@ jobs:
             echo "SWIFTLY_TOOLCHAINS_DIR=$SWIFTLY_TOOLCHAINS_DIR"
           } >> "$GITHUB_ENV"
           echo "$SWIFTLY_BIN_DIR" >> "$GITHUB_PATH"
+
+      # Windows images ship no Swift; install the swift.org release.
+      - name: Install Swift 6.4 (Windows)
+        if: runner.os == 'Windows'
+        uses: compnerd/gha-setup-swift@9ff1ee4c44888c5817fc14d1b257ac8cabb4935f # v0.5.1
+        with:
+          swift-version: swift-6.4.3-release
+          swift-build: 6.4.3-RELEASE
+
       - run: swift --version
-      - run: swift test
+      - name: Build
+        run: swift build
+      - name: Run tests
+        run: swift test
 
   conformance:
     runs-on: ubuntu-24.04
