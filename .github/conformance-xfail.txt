@@ -1,6 +1,6 @@
 # sigstore-conformance tests expected to fail (strict xfail: an unexpected
 # pass fails CI, so remove entries as features land). Shell-style patterns
-# matched against pytest test names. Used by .github/workflows/conformance.yml
+# matched against pytest test names. Used by .github/workflows/ci.yml
 # and scripts/run-conformance.sh.
 
 # Rekor v2 (hashedrekord/dsse 0.0.2 entries, signed-note checkpoints).
@@ -13,10 +13,8 @@ test_verify*-rekor2-checkpoint-two-sigs-cosigned]
 test_verify*-rekor2-checkpoint-two-sigs-from-origin]
 test_verify*-bundle-with-sct-with-extensions]
 
-# RFC 3161 signed timestamps (some also Rekor v2).
+# Rekor v2 bundles that also carry RFC 3161 timestamps.
 test_verify*-rekor2-timestamp-with-embedded-cert]
 test_verify*-rekor2-timestamp-without-embedded-cert]
 test_verify*-rekor2-timestamp-with-expired-cert-chain]
-test_verify*-intoto-with-custom-trust-root]
-test_verify*-managed-key-happy-path]
 test_verify*-trust-root-tsa-validity-end-inclusive]

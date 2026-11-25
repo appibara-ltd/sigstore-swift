@@ -1,8 +1,4 @@
 // Port of sigstore-go pkg/root/timestamping_authority.go.
-//
-// RFC 3161 timestamp verification is NOT implemented yet (see PROGRESS.md).
-// The types exist so trusted roots with TSAs parse, and so the verifier can
-// report signed timestamps as unverified.
 
 import Foundation
 import SigstoreCommon
@@ -20,8 +16,10 @@ public struct Timestamp: Sendable, Hashable {
 }
 
 /// Mirrors `root.TimestampingAuthority`.
+///
+/// `verify` is `async` because swift-certificates' path validator is async.
 public protocol TimestampingAuthority: Sendable {
-    func verify(signedTimestamp: Data, signature: Data) throws -> Timestamp
+    func verify(signedTimestamp: Data, signature: Data) async throws -> Timestamp
 }
 
 /// Mirrors `root.SigstoreTimestampingAuthority`.
@@ -49,7 +47,21 @@ public struct SigstoreTimestampingAuthority: TimestampingAuthority {
         self.uri = uri
     }
 
-    public func verify(signedTimestamp: Data, signature: Data) throws -> Timestamp {
-        throw SigstoreError("RFC 3161 timestamp verification is not implemented")
+    public func verify(signedTimestamp: Data, signature: Data) async throws -> Timestamp {
+        guard let root else {
+            let display = uri.isEmpty ? "" : uri + " "
+            throw SigstoreError("timestamping authority \(display)root certificate is nil")
+        }
+        let opts = TSAVerification.VerifyOpts(tsaCertificate: leaf, intermediates: intermediates, roots: [root])
+        let timestamp = try await TSAVerification.verifyTimestampResponse(
+            Array(signedTimestamp), artifact: Array(signature), opts: opts)
+
+        if let start = validityPeriodStart, timestamp.time < start {
+            throw SigstoreError("timestamp is before the validity period start")
+        }
+        if let end = validityPeriodEnd, timestamp.time > end {
+            throw SigstoreError("timestamp is after the validity period end")
+        }
+        return Timestamp(time: timestamp.time, uri: uri)
     }
 }

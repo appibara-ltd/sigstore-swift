@@ -2,11 +2,12 @@
 
 Continuity log. Update at the end of every session.
 
-## Status (2026-11-25, session 1, part 2)
+## Status (2026-11-25, session 1, part 3)
 
-**v0.1 is on `main` (9c0941d). Conformance harness added (uncommitted).**
-`swift build` / `swift test` pass on macOS (Swift 6.4, 29 tests). Linux is
-first exercised by `.github/workflows/ci.yml` (not yet run).
+**RFC 3161 timestamp verification implemented (uncommitted).** `main` (6a0c4dd)
+has v0.1 + the conformance harness; CI (run 45624529665) is green on Linux,
+macOS (swiftly Swift 6.4.3) and conformance. `swift test`: 55 tests pass on
+macOS.
 
 ### Conformance (sigstore-conformance, verify tests only)
 
@@ -17,17 +18,18 @@ Run locally with `scripts/run-conformance.sh` (needs `uv`); CI runs the
 
 | Suite ref | Passed | Expected failures | Unexpected | CPython release bundles |
 | --- | --- | --- | --- | --- |
-| v0.0.29 (CI pin) | 109 | 26 | 0 | 81/81 |
-| main e275ffb | 113 | 28 | 0 | 81/81 |
+| v0.0.29 (CI pin) | 113 | 22 | 0 | 81/81 |
+| main e275ffb | 117 | 24 | 0 | 81/81 |
 
 Expected failures (`.github/conformance-xfail.txt`, strict) are all happy
-paths needing Rekor v2 or RFC 3161. Every `_fail` case is rejected, but
-these are rejected only because Rekor v2 is unsupported, not for the defect
-they target, so they prove nothing yet: all `rekor2-*_fail` and
-`trust-root-tlog-missing-validity-start_fail`. Same for
-`intoto-tsa-timestamp-outside-cert-validity_fail` (rejected because RFC 3161
-is unimplemented). Re-check their rejection reasons when those features land
-(`scripts/run-conformance.sh -rA`, or run the client on the asset dir).
+paths needing Rekor v2 (some also carry RFC 3161 timestamps). Every `_fail`
+case is rejected, but these are rejected only because Rekor v2 is
+unsupported, not for the defect they target, so they prove nothing yet: all
+`rekor2-*_fail` and `trust-root-tlog-missing-validity-start_fail`. Re-check
+their rejection reasons when Rekor v2 lands (`scripts/run-conformance.sh -rA`,
+or run the client on the asset dir).
+`intoto-tsa-timestamp-outside-cert-validity_fail` is now rejected for the
+right reason (leaf certificate expired at the TSA time).
 
 When no `--trusted-root` is given, the client uses the embedded public-good
 root, or with `--staging` an embedded staging root
@@ -65,11 +67,24 @@ and a policy of artifact digest + OIDC issuer
   certificate validity, duplicate-entry and entry-count limits.
 - in-toto statement: subject digest vs artifact digest(s) or artifact bytes;
   subject/digest limits; predicate parsed to `Google_Protobuf_Struct`.
+- RFC 3161 signed timestamps (`Sources/SigstoreRoot/RFC3161.swift`, port of
+  timestamp-authority v2.2.0 `pkg/verification` + digitorus `timestamp` /
+  `pkcs7` at sigstore-go's pins): TimeStampResp status, CMS SignedData
+  signature (signed attributes + messageDigest, signingTime vs signer cert),
+  signer chain to the TSA root at genTime with the timeStamping EKU on every
+  certificate that has an EKU, leaf rules (end-entity, critical EKU, exactly
+  one EKU = timeStamping, intermediates' EKU, trusted-root leaf must equal
+  the embedded signer), SHA-256/384/512 imprint = hash of the signature
+  bytes, PQC policy OID rejected for non-ML-DSA chains, TSA `validFor`
+  (inclusive), duplicate-TSA and token-count limits.
+- GitHub release attestations (`release.sigstore.json`) verify against
+  GitHub's trusted root with `.withSignedTimestamps(threshold: 1)`.
 
 ### Stubbed / not implemented
 
-- RFC 3161 timestamps (`verifySignedTimestamp` reports every token as
-  unverified; `.withSignedTimestamps` therefore always fails).
+- RFC 3161: BER-encoded tokens, `subjectKeyIdentifier` signer IDs (also
+  unsupported by Go's pkcs7), ML-DSA TSA keys, revocation (not checked by Go
+  either).
 - Rekor v2 entries / signed-note checkpoints (throws "not supported yet").
 - TUF client (`SigstoreTUF` holds only `Options`); trusted root is embedded.
 - Message signatures over a digest only: ECDSA done (prehashed `Digest`
@@ -87,7 +102,18 @@ and a policy of artifact digest + OIDC issuer
 - `provenance.sigstore.json` — `https://slsa.dev/provenance/v1`, Fulcio cert,
   one Rekor v1 `dsse` 0.0.1 entry with proof + promise, no TSA.
 - `release.sigstore.json` — `https://in-toto.io/attestation/release/v0.2`,
-  GitHub-instance TSA token only, no tlog (needs RFC 3161 + GitHub trusted root).
+  GitHub-instance TSA token only, no tlog. SAN
+  `https://dotcom.releases.github.com`.
+
+`Tests/SigstoreTests/Fixtures/github_trusted_root.json` is GitHub's
+instance trusted root from `gh attestation trusted-root` (second line),
+sha256 `072b653e…b3c4`, fetched 2026-11-25.
+
+`Tests/SigstoreTests/Fixtures/conformance/intoto-with-custom-trust-root/` is
+copied from sigstore-conformance (Apache-2.0) @ `e275ffb`
+`test/assets/bundle-verify/`: a real TSA token (genTime 2023-02-01T00:00:00Z).
+Negative TSA tests build tokens with a throwaway PKI (`TestTSA` in
+`TimestampAuthorityTests.swift`).
 
 `Sources/SigstoreRoot/Resources/trusted_root.json` (also copied to test
 fixtures) is `sigstore/root-signing` `targets/trusted_root.json` @ main,
@@ -95,15 +121,10 @@ sha256 `6494e21e…0b66`, fetched 2026-11-25.
 
 ## Next steps (toward conformance)
 
-1. **CI**: first run (45622716809) passed on Linux (tests + conformance);
-   macOS failed on Swift 6.3 and now installs 6.4 via swiftly — confirm the
-   next run is green.
-2. **RFC 3161 / TSA** (sigstore-go `pkg/verify/tsa.go`, `root/timestamping_authority.go`):
-   parse TimeStampResp/TSTInfo (CMS SignedData) with swift-asn1, verify the
-   signer chain to the TSA root at genTime, message imprint = hash of the
-   signature bytes, TSA `validFor`. Unblocks `release.sigstore.json` (also
-   needs GitHub's trusted root, which `gh` fetches via TUF from
-   `tuf-repo.github.com`).
+1. **CI**: confirm the RFC 3161 commit is green.
+2. **GitHub trusted root for consumers**: ship or fetch (TUF,
+   `tuf-repo.github.com`) GitHub's trusted root so appitool can verify
+   release attestations; tests use a fixture copy only.
 3. **Rekor v2**: `hashedrekord` 0.0.2 / `dsse` 0.0.2 bodies, C2SP signed-note
    checkpoints (origin from `baseUrl` host, Ed25519/ECDSA note key IDs),
    entry hash reconstruction (`reconstructV2EntryHash`), inclusion proof
@@ -113,7 +134,7 @@ sha256 `6494e21e…0b66`, fetched 2026-11-25.
    the public-good and GitHub repos; `TrustedRoot.fetch()` / live refresh.
 5. Prehashed signature verification (message signatures with digest only),
    Ed25519ph, ML-DSA, `SigningConfig`, `VerificationResult` JSON.
-6. Linux CI (swift:6.4 image), fuzz/property tests for parsers, then a
+6. Fuzz/property tests for parsers (bundle, Rekor bodies, CMS/TSTInfo), then a
    security review before announcing.
 7. appitool integration: replace `gh attestation verify --bundle` in
    `self-update` (fetch bundles from the attestations API, verify with the
@@ -151,6 +172,14 @@ sha256 `6494e21e…0b66`, fetched 2026-11-25.
   verify tests only (`skip-signing`), no staging run until signing exists.
 - Rekor v1 `intoto` 0.0.2 signatures decode leniently like Go (bad inner
   base64 → empty signature → "signature does not match"), not at parse time.
+- RFC 3161 parsing is a hand-written SwiftASN1 walk (swift-certificates' CMS
+  types are internal). Deviations from Go: DER only (pkcs7 runs `ber2der`
+  first); SHA-1 digests/signatures rejected at parse rather than by x509;
+  signed attributes are verified over their received encoding re-tagged as
+  SET (Go re-marshals and sorts; identical for DER input); chain validation
+  returns one chain (swift-certificates) instead of all.
+- `TimestampingAuthority.verify` and `verifySignedTimestamp*` are `async`
+  (swift-certificates' path validator is async).
 
 ## Spec questions
 
@@ -167,3 +196,10 @@ sha256 `6494e21e…0b66`, fetched 2026-11-25.
 - GitHub's attestations API returns the release bundle signed by GitHub's
   Sigstore instance (TSA only). The public-good trusted root alone cannot
   verify it; a consumer needs GitHub's trusted root too.
+- pkcs7 (and so sigstore-go) does not check the CMS `eContentType` is
+  id-ct-TSTInfo nor the signed `contentType` attribute (RFC 5652 §11.1,
+  RFC 3161 §2.4.2). Kept for parity; worth raising upstream.
+- `CodeSigningPolicy` (Fulcio) skips the root's EKU, but Go's
+  `checkChainForKeyUsage` checks every certificate including the root
+  (`TimestampingPolicy` does). Harmless for current Fulcio roots (no EKU);
+  align it in a follow-up.

@@ -62,12 +62,24 @@ struct ProvenanceVerificationTests {
         #expect(result.statement?.predicateType == Fixtures.slsaProvenanceV1)
     }
 
-    @Test func releaseBundleParsesButNeedsTSA() async throws {
-        // TSA-only bundle from GitHub's own Sigstore instance: not verifiable
-        // until RFC 3161 support and GitHub's trusted root are added.
+    /// GitHub-instance release attestation: TSA timestamp only, no tlog.
+    /// Verified as `gh` does for GitHub's instance (`WithSignedTimestamps(1)`).
+    @Test func verifiesGitHubReleaseBundleWithTSA() async throws {
         let bundle = try SigstoreBundle.Bundle(json: Fixtures.data("release.sigstore.json"))
         #expect(try bundle.tlogEntries().isEmpty)
         #expect(try bundle.timestamps().count == 1)
+
+        let verifier = try Verifier(
+            trustedMaterial: Fixtures.githubTrustedRoot(), options: [.withSignedTimestamps(threshold: 1)])
+        let policy = PolicyBuilder(
+            .withArtifactDigest(algorithm: "sha256", digest: Fixtures.artifactDigest),
+            .withCertificateIdentity(
+                try CertificateIdentity(issuer: "", issuerRegex: ".*", sanValue: Fixtures.githubReleasesSAN)))
+        let result = try await verifier.verify(bundle, policy: policy)
+        #expect(result.statement?.predicateType == "https://in-toto.io/attestation/release/v0.2")
+        #expect(result.verifiedTimestamps.map(\.type) == ["TimestampAuthority"])
+
+        // The public-good root has no matching TSA.
         await #expect(throws: (any Error).self) {
             _ = try await Fixtures.publicGoodVerifier().verify(bundle, policy: Fixtures.policy())
         }

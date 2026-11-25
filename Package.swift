@@ -54,6 +54,7 @@ let package = Package(
                 "SigstoreCommon",
                 .product(name: "Crypto", package: "swift-crypto"),
                 .product(name: "_CryptoExtras", package: "swift-crypto"),
+                .product(name: "SwiftASN1", package: "swift-asn1"),
                 .product(name: "X509", package: "swift-certificates"),
             ],
             resources: [.copy("Resources/trusted_root.json")]
@@ -126,6 +127,7 @@ let package = Package(
             dependencies: [
                 "Sigstore",
                 .product(name: "Crypto", package: "swift-crypto"),
+                .product(name: "SwiftASN1", package: "swift-asn1"),
                 .product(name: "X509", package: "swift-certificates"),
             ],
             resources: [.copy("Fixtures")]

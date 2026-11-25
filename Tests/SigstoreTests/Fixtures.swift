@@ -42,6 +42,18 @@ enum Fixtures {
         return try newTrustedRootProtobuf(Data(contentsOf: url))
     }
 
+    /// SAN of GitHub's release attestation signing certificate.
+    static let githubReleasesSAN = "https://dotcom.releases.github.com"
+
+    /// GitHub's Sigstore instance trusted root (`gh attestation trusted-root`).
+    static func githubTrustedRoot() throws -> TrustedRoot {
+        guard
+            let url = Foundation.Bundle.module.url(
+                forResource: "github_trusted_root", withExtension: "json", subdirectory: "Fixtures")
+        else { throw SigstoreError("github_trusted_root.json fixture not found") }
+        return try TrustedRoot(json: Data(contentsOf: url))
+    }
+
     static func trustedRoot() throws -> TrustedRoot {
         try TrustedRoot.embeddedPublicGood()
     }

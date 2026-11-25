@@ -54,7 +54,7 @@ public struct VerifierOption: Sendable {
         VerifierOption { $0.omitStatementPredicate = true }
     }
 
-    /// Mirrors `WithSignedTimestamps` (RFC 3161 — not implemented yet).
+    /// Mirrors `WithSignedTimestamps`.
     public static func withSignedTimestamps(threshold: Int) -> VerifierOption {
         VerifierOption { c in
             guard threshold >= 1 else { throw SigstoreError("signed timestamp threshold must be at least 1") }
@@ -179,7 +179,7 @@ public struct Verifier: Sendable {
         // > ## Establishing a Time for the Signature
         let verifiedTimestamps: [TimestampVerificationResult]
         do {
-            verifiedTimestamps = try verifyObserverTimestamps(entity, logTimestamps: verifiedTlogTimestamps)
+            verifiedTimestamps = try await verifyObserverTimestamps(entity, logTimestamps: verifiedTlogTimestamps)
         } catch {
             throw error.wrapped("failed to verify timestamps")
         }
@@ -329,11 +329,11 @@ public struct Verifier: Sendable {
     /// Mirrors `Verifier.VerifyObserverTimestamps`.
     public func verifyObserverTimestamps(
         _ entity: any SignedEntity, logTimestamps: [TimestampVerificationResult]
-    ) throws -> [TimestampVerificationResult] {
+    ) async throws -> [TimestampVerificationResult] {
         var verifiedTimestamps: [TimestampVerificationResult] = []
 
         if config.requireSignedTimestamps {
-            let signed = try verifySignedTimestampWithThreshold(
+            let signed = try await verifySignedTimestampWithThreshold(
                 entity, trustedMaterial: trustedMaterial, threshold: config.signedTimestampThreshold)
             verifiedTimestamps += signed.map {
                 TimestampVerificationResult(type: "TimestampAuthority", uri: $0.uri, timestamp: $0.time)
@@ -353,7 +353,7 @@ public struct Verifier: Sendable {
             let signed: [Timestamp]
             let errors: [any Error]
             do {
-                (signed, errors) = try verifySignedTimestamp(entity, trustedMaterial: trustedMaterial)
+                (signed, errors) = try await verifySignedTimestamp(entity, trustedMaterial: trustedMaterial)
             } catch {
                 throw error.wrapped("failed to verify signed timestamps")
             }
