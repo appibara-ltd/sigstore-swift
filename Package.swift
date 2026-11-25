@@ -57,8 +57,7 @@ let package = Package(
                 .product(name: "_CryptoExtras", package: "swift-crypto"),
                 .product(name: "SwiftASN1", package: "swift-asn1"),
                 .product(name: "X509", package: "swift-certificates"),
-            ],
-            resources: [.copy("Resources/trusted_root.json")]
+            ]
         ),
         // Mirrors sigstore-go pkg/tlog.
         .target(
@@ -81,7 +80,8 @@ let package = Package(
                 .product(name: "_CryptoExtras", package: "swift-crypto"),
                 .product(name: "X509", package: "swift-certificates"),
             ],
-            resources: [.copy("Resources/root.json"), .copy("Resources/staging_root.json")]
+            // Compiled in by scripts/embed-tuf-roots.sh (EmbeddedRoots.swift).
+            exclude: ["Resources"]
         ),
         // Mirrors sigstore-go pkg/verify.
         .target(

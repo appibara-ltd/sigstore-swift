@@ -14,17 +14,15 @@ public let noCache = 0
 public let maxCache = Int.max
 
 /// Mirrors `tuf.DefaultRoot`: the embedded public-good `root.json`.
-public func defaultRoot() -> Data { embeddedRoot("root") }
+public func defaultRoot() -> Data { decodeEmbedded(EmbeddedRoots.root) }
 
 /// Mirrors `tuf.StagingRoot`: the embedded staging `root.json`.
-public func stagingRoot() -> Data { embeddedRoot("staging_root") }
+public func stagingRoot() -> Data { decodeEmbedded(EmbeddedRoots.stagingRoot) }
 
-private func embeddedRoot(_ name: String) -> Data {
-    guard let url = Bundle.module.url(forResource: name, withExtension: "json"),
-        let data = try? Data(contentsOf: url)
-    else {
-        // As in Go: the package is not assembled as it should be.
-        fatalError("embedded TUF \(name).json is missing")
+private func decodeEmbedded(_ chunks: [String]) -> Data {
+    guard let data = Data(base64Encoded: chunks.joined()) else {
+        // As in Go: the binary is not assembled as it should be.
+        fatalError("embedded TUF root is corrupt")
     }
     return data
 }

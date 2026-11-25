@@ -96,16 +96,6 @@ public struct TrustedRoot: TrustedMaterial {
         self.timestampingAuthorities = timestampAuthorities
         self.rekorLogs = transparencyLogs
     }
-
-    /// The Sigstore public-good `trusted_root.json` embedded in this package
-    /// (no Go equivalent; sigstore-go fetches it via TUF). Until SigstoreTUF
-    /// exists, callers must update the package to pick up key rotations.
-    public static func embeddedPublicGood() throws -> TrustedRoot {
-        guard let url = Bundle.module.url(forResource: "trusted_root", withExtension: "json") else {
-            throw SigstoreError("embedded trusted_root.json not found")
-        }
-        return try TrustedRoot(json: Data(contentsOf: url))
-    }
 }
 
 /// Mirrors `NewTrustedRootProtobuf`.

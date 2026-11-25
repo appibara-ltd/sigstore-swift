@@ -27,13 +27,17 @@ at the end of every session.
   - Deviations are listed in `PROGRESS.md` → Decisions.
 - Security-sensitive code: never weaken a check to make a test pass. Every new
   check needs a negative test.
-- Generated code in `Sources/SigstoreProtobufSpecs/Generated` is never edited
-  by hand; change `scripts/generate-protos.sh` and regenerate.
+- Generated code in `Sources/SigstoreProtobufSpecs/Generated` and
+  `Sources/SigstoreTUF/EmbeddedRoots.swift` is never edited by hand; change
+  `scripts/generate-protos.sh` / `scripts/embed-tuf-roots.sh` (or their
+  inputs) and regenerate.
+- Library targets have no SwiftPM resource bundles (they make swift-build
+  on Windows flaky); embed data via a generator script.
 
 ## Allowed without asking
 
 - `swift build`, `swift test`, `swift package resolve`
-- `scripts/generate-protos.sh`
+- `scripts/generate-protos.sh`, `scripts/embed-tuf-roots.sh`
 - read-only `git` commands (`status`, `diff`, `log`, `show`, `blame`)
 - the sigstore-conformance harness, once added
 
@@ -59,7 +63,7 @@ at the end of every session.
 | `SigstoreBundle` | `pkg/bundle` |
 | `SigstoreRoot` | `pkg/root` |
 | `SigstoreTLog` | `pkg/tlog` |
-| `SigstoreTUF` | `pkg/tuf` (stub) |
+| `SigstoreTUF` | `pkg/tuf` (+ go-tuf v2 `metadata`) |
 | `SigstoreVerify` | `pkg/verify` |
 | `SigstoreFulcio` | `pkg/fulcio/certificate` |
 | `SigstoreCommon` | helpers standing in for `sigstore/sigstore` signature verifiers etc. |

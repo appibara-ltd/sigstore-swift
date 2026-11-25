@@ -525,6 +525,15 @@ struct TUFTests {
         #expect(throws: (any Error).self) { try JSONValue(parsing: Data(#"{"a":1.5}"#.utf8)).canonicalBytes() }
     }
 
+    /// The compiled-in roots are byte-identical to sigstore-go v1.4.1's
+    /// `pkg/tuf/repository/{root,staging_root}.json`.
+    @Test func embeddedRootsMatchSigstoreGo() {
+        #expect(Hex.encode(Array(SHA256.hash(data: defaultRoot())))
+            == "f1560a649c25d2f0495780da557facfdf2b612493acc45fdd95d8bbf2c26b96c")
+        #expect(Hex.encode(Array(SHA256.hash(data: stagingRoot())))
+            == "baf71cd3c9a1aa8cfb08de679f7ce684c19a0bd1ea4467c1e1013b8c65652875")
+    }
+
     @Test func embeddedRootsAreSelfSigned() throws {
         #expect(try TrustedMetadata(rootData: defaultRoot()).root.signed.version >= 1)
         #expect(try TrustedMetadata(rootData: stagingRoot()).root.signed.version >= 1)

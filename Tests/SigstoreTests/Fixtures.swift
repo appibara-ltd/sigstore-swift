@@ -54,8 +54,9 @@ enum Fixtures {
         return try TrustedRoot(json: Data(contentsOf: url))
     }
 
+    /// Public-good trusted root snapshot (`Fixtures/trusted_root.json`).
     static func trustedRoot() throws -> TrustedRoot {
-        try TrustedRoot.embeddedPublicGood()
+        try TrustedRoot(protobuf: trustedRootProtobuf())
     }
 
     /// The verifier configuration `gh attestation verify` uses for the
