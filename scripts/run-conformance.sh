@@ -35,7 +35,7 @@ if [ ! -x "$DIR/env/bin/python" ]; then
 fi
 VIRTUAL_ENV="$DIR/env" uv pip install -q --requirement "$DIR/suite/requirements.txt"
 
-XFAIL="$(grep -v '^#' "$ROOT/.github/conformance-xfail.txt" | xargs)"
+XFAIL="$(sed -e '/^#/d' "$ROOT/.github/conformance-xfail.txt" | xargs)"
 cd "$DIR/suite"
 GHA_SIGSTORE_CONFORMANCE_XFAIL="$XFAIL" GITHUB_WORKSPACE="$DIR/workspace" \
   "$DIR/env/bin/python" -m pytest test -q -p no:cacheprovider \

@@ -67,6 +67,7 @@ let package = Package(
                 "SigstoreCommon",
                 "SigstoreRoot",
                 .product(name: "Crypto", package: "swift-crypto"),
+                .product(name: "SwiftProtobuf", package: "swift-protobuf"),
                 .product(name: "X509", package: "swift-certificates"),
             ]
         ),

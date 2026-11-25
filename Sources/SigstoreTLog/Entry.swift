@@ -1,9 +1,8 @@
-// Port of sigstore-go pkg/tlog/entry.go (Rekor v1 entries).
-//
-// Rekor v2 (rekor-tiles) entries are not supported yet; see PROGRESS.md.
+// Port of sigstore-go pkg/tlog/entry.go (Rekor v1 and Rekor v2 entries).
 
 import Foundation
 import SigstoreCommon
+import SwiftProtobuf
 import SigstoreProtobufSpecs
 import SigstoreRoot
 import X509
@@ -32,15 +31,25 @@ public struct Entry: Sendable {
     public let kind: String
     public let version: String
     public let rekorV1Entry: RekorV1Entry?
+    /// Rekor v2 (rekor-tiles) body; only hashedrekord 0.0.2 is accepted.
+    public let rekorV2Entry: Dev_Sigstore_Rekor_V2_Entry?
     let signedEntryTimestamp: Data?
     public let transparencyLogEntry: Dev_Sigstore_Rekor_V1_TransparencyLogEntry
 
     init(tle: Dev_Sigstore_Rekor_V1_TransparencyLogEntry) throws {
         let body = tle.canonicalizedBody
-        let parsed = try RekorV1Body.parse(body)
-        self.kind = parsed.kind
-        self.version = parsed.apiVersion
-        self.rekorV1Entry = parsed.entry
+        if let v2 = unmarshalRekorV2Entry(body) {
+            self.kind = v2.kind
+            self.version = v2.apiVersion
+            self.rekorV1Entry = nil
+            self.rekorV2Entry = v2
+        } else {
+            let parsed = try RekorV1Body.parse(body)
+            self.kind = parsed.kind
+            self.version = parsed.apiVersion
+            self.rekorV1Entry = parsed.entry
+            self.rekorV2Entry = nil
+        }
         if tle.hasInclusionPromise, !tle.inclusionPromise.signedEntryTimestamp.isEmpty {
             self.signedEntryTimestamp = tle.inclusionPromise.signedEntryTimestamp
         } else {
@@ -63,20 +72,27 @@ public struct Entry: Sendable {
         case .intotoV002(let e):
             // Go: base64.StdEncoding.DecodeString(string(sig)); empty on failure.
             return String(data: e.signatures[0].sig, encoding: .utf8).flatMap(Base64.decode) ?? Data()
-        case nil: return Data()
+        case nil:
+            if case .hashedRekordV002(let e) = rekorV2Entry?.spec.spec { return e.signature.content }
+            return Data()
         }
     }
 
     /// Mirrors `Entry.PublicKey`: the PEM certificate or public key in the body.
     public var publicKey: EntryPublicKey? {
-        let pem: Data
+        let der: [UInt8]
         switch rekorV1Entry {
-        case .dsseV001(let e): pem = e.signatures[0].verifierPEM
-        case .hashedRekordV001(let e): pem = e.publicKeyPEM
-        case .intotoV002(let e): pem = e.signatures[0].publicKeyPEM
-        case nil: return nil
+        case .dsseV001(let e): guard let d = PEM.firstBlockDER(e.signatures[0].verifierPEM) else { return nil }; der = d
+        case .hashedRekordV001(let e): guard let d = PEM.firstBlockDER(e.publicKeyPEM) else { return nil }; der = d
+        case .intotoV002(let e): guard let d = PEM.firstBlockDER(e.signatures[0].publicKeyPEM) else { return nil }; der = d
+        case nil:
+            guard case .hashedRekordV002(let e) = rekorV2Entry?.spec.spec else { return nil }
+            switch e.signature.verifier.verifier {
+            case .publicKey(let k): der = Array(k.rawBytes)
+            case .x509Certificate(let c): der = Array(c.rawBytes)
+            case nil: return nil
+            }
         }
-        guard let der = PEM.firstBlockDER(pem) else { return nil }
         if let cert = try? Certificate(derEncoded: der) {
             return .certificate(cert)
         }
@@ -98,15 +114,19 @@ public struct Entry: Sendable {
 
     public var hasInclusionProof: Bool { transparencyLogEntry.hasInclusionProof }
 
-    /// Always false until Rekor v2 support lands.
-    public var isRekorV2: Bool { false }
+    public var isRekorV2: Bool { rekorV2Entry != nil }
 
-    /// Mirrors `Entry.GetHashedRekordDigest`.
+    /// Mirrors `Entry.GetHashedRekordDigest`. For Rekor v2 the algorithm is
+    /// the protobuf enum name (e.g. `SHA2_256`), as Go's `String()`.
     public func hashedRekordDigest() -> (digest: [UInt8], algorithm: String)? {
-        guard case .hashedRekordV001(let e) = rekorV1Entry,
-            let bytes = Hex.decode(e.dataHashValue)
-        else { return nil }
-        return (bytes, e.dataHashAlgorithm)
+        if case .hashedRekordV001(let e) = rekorV1Entry {
+            guard let bytes = Hex.decode(e.dataHashValue) else { return nil }
+            return (bytes, e.dataHashAlgorithm)
+        }
+        if case .hashedRekordV002(let e) = rekorV2Entry?.spec.spec, e.hasData {
+            return (Array(e.data.digest), protoName(e.data.algorithm))
+        }
+        return nil
     }
 
     /// Mirrors `Entry.GetDssePayloadHash`.
@@ -153,11 +173,57 @@ public func parseTransparencyLogEntry(_ tle: Dev_Sigstore_Rekor_V1_TransparencyL
     return entry
 }
 
-/// Mirrors `ValidateEntry`. Structural validation happens while decoding the
-/// body (see `RekorV1Body`), so this only rejects unsupported types.
+/// Mirrors `ValidateEntry`. Rekor v1 structural validation happens while
+/// decoding the body (see `RekorV1Body`); Rekor v2 hashedrekord 0.0.2 is
+/// checked here (`validateHashedRekordV002Entry`).
 public func validateEntry(_ entry: Entry) throws {
-    guard entry.rekorV1Entry != nil else {
+    if entry.rekorV1Entry != nil { return }
+    guard let v2 = entry.rekorV2Entry else {
         throw SigstoreError("unsupported entry type: \(entry.kind)/\(entry.version)")
+    }
+    switch v2.spec.spec {
+    case .hashedRekordV002(let hr):
+        try validateHashedRekordV002Entry(hr)
+    default:
+        throw SigstoreError("unsupported rekor v2 entry type")
+    }
+}
+
+/// Mirrors `validateHashedRekordV002Entry` and rekor-tiles
+/// `types/verifier.Validate`.
+func validateHashedRekordV002Entry(_ hr: Dev_Sigstore_Rekor_V2_HashedRekordLogEntryV002) throws {
+    guard hr.hasSignature, !hr.signature.content.isEmpty else { throw SigstoreError("missing signature") }
+    guard hr.signature.hasVerifier else { throw SigstoreError("missing verifier") }
+    guard hr.hasData else { throw SigstoreError("missing digest") }
+    switch hr.signature.verifier.verifier {
+    case .publicKey(let k):
+        guard !k.rawBytes.isEmpty else { throw SigstoreError("missing public key raw bytes") }
+    case .x509Certificate(let c):
+        guard !c.rawBytes.isEmpty else { throw SigstoreError("missing X.509 certificate raw bytes") }
+    case nil:
+        throw SigstoreError("missing signature public key or X.509 certificate")
+    }
+}
+
+/// Mirrors `unmarshalRekorV2Entry`: strict protojson (unknown fields
+/// rejected), hashedrekord with apiVersion 0.0.2 only. Returns nil for
+/// anything else so the caller falls back to Rekor v1.
+func unmarshalRekorV2Entry(_ body: Data) -> Dev_Sigstore_Rekor_V2_Entry? {
+    guard let entry = try? Dev_Sigstore_Rekor_V2_Entry(jsonUTF8Data: body) else { return nil }
+    guard case .hashedRekordV002 = entry.spec.spec, entry.apiVersion == "0.0.2" else { return nil }
+    return entry
+}
+
+/// Go's `HashAlgorithm.String()`: the protobuf enum value name.
+func protoName(_ alg: Dev_Sigstore_Common_V1_HashAlgorithm) -> String {
+    switch alg {
+    case .unspecified: return "HASH_ALGORITHM_UNSPECIFIED"
+    case .sha2256: return "SHA2_256"
+    case .sha2384: return "SHA2_384"
+    case .sha2512: return "SHA2_512"
+    case .sha3256: return "SHA3_256"
+    case .sha3384: return "SHA3_384"
+    case .UNRECOGNIZED(let n): return "\(n)"
     }
 }
 

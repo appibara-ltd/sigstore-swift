@@ -2,19 +2,5 @@
 # pass fails CI, so remove entries as features land). Shell-style patterns
 # matched against pytest test names. Used by .github/workflows/ci.yml
 # and scripts/run-conformance.sh.
-
-# Rekor v2 (hashedrekord/dsse 0.0.2 entries, signed-note checkpoints).
-test_verify*-rekor2-happy-path]
-test_verify*-rekor2-dsse-happy-path]
-test_verify*-rekor2-checkpoint-cosigned]
-test_verify*-rekor2-checkpoint-multiple-cosigs]
-test_verify*-rekor2-checkpoint-origin-not-first]
-test_verify*-rekor2-checkpoint-two-sigs-cosigned]
-test_verify*-rekor2-checkpoint-two-sigs-from-origin]
-test_verify*-bundle-with-sct-with-extensions]
-
-# Rekor v2 bundles that also carry RFC 3161 timestamps.
-test_verify*-rekor2-timestamp-with-embedded-cert]
-test_verify*-rekor2-timestamp-without-embedded-cert]
-test_verify*-rekor2-timestamp-with-expired-cert-chain]
-test_verify*-trust-root-tsa-validity-end-inclusive]
+#
+# Empty: every verify test passes (signing tests are skipped).

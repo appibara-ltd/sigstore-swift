@@ -79,7 +79,7 @@ jobs:
 
       - name: Read expected failures
         id: xfail
-        run: echo "list=$(grep -v '^#' .github/conformance-xfail.txt | xargs)" >> "$GITHUB_OUTPUT"
+        run: echo "list=$(sed -e '/^#/d' .github/conformance-xfail.txt | xargs)" >> "$GITHUB_OUTPUT"
 
       # Verify-only client: signing tests are skipped, so a staging run
       # (which only has signing tests) is omitted.

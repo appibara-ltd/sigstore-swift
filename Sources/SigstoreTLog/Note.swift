@@ -1,0 +1,268 @@
+// Rekor v2 signed-note checkpoints and inclusion verification.
+//
+// Port of the code sigstore-go v1.4.1 relies on, at the versions it pins:
+// - rekor-tiles v2.4.2 pkg/note (`NewNoteVerifier`, `KeyHash`) and
+//   pkg/verify (`VerifyCheckpoint`, `VerifyLogEntryWithHash`);
+// - golang.org/x/mod v0.43.0 sumdb/note (`Open`, `VerifierList`);
+// - transparency-dev/formats v0.1.1 log (`ParseCheckpoint`,
+//   `Checkpoint.Unmarshal`).
+// ML-DSA note keys (cosignature/v1 framing) are not supported.
+
+import Crypto
+import Foundation
+import SigstoreCommon
+import SigstoreProtobufSpecs
+import SwiftProtobuf
+
+/// Mirrors a sumdb `note.Verifier` built by rekor-tiles `NewNoteVerifier`.
+public struct NoteVerifier: Sendable {
+    public let name: String
+    public let keyHash: UInt32
+    let verifier: SignatureVerifier
+
+    /// Mirrors `note.NewNoteVerifier`: `origin` is the log's origin (the
+    /// hostname of its base URL); `verifier` verifies note signatures over
+    /// the note text with the log's configured hash.
+    public init(origin: String, verifier: SignatureVerifier) throws {
+        guard isValidNoteName(origin) else { throw SigstoreError("invalid name \(origin)") }
+        self.name = origin
+        self.keyHash = try noteKeyHash(origin: origin, verifier: verifier)
+        self.verifier = verifier
+    }
+
+    func verify(_ message: [UInt8], _ signature: [UInt8]) -> Bool {
+        verifier.verify(signature: signature, message: message)
+    }
+}
+
+/// Mirrors rekor-tiles `note.KeyHash` (the 4-byte key ID).
+/// - ECDSA: SHA-256(PKIX) (no name, matching Rekor v1 key hints).
+/// - Ed25519: SHA-256(name || "\n" || 0x01 || raw key).
+/// - RSA: SHA-256(name || "\n" || 0xFF || "PKIX-RSA-PKCS#1v1.5" || PKIX).
+public func noteKeyHash(origin: String, verifier: SignatureVerifier) throws -> UInt32 {
+    let digest: SHA256.Digest
+    switch verifier.key {
+    case .ecdsaP256, .ecdsaP384, .ecdsaP521:
+        digest = SHA256.hash(data: verifier.publicKey.pkixBytes)
+    case .ed25519(let k):
+        digest = SHA256.hash(data: Array(origin.utf8) + [0x0A, 0x01] + Array(k.rawRepresentation))
+    case .rsaPKCS1v15:
+        digest = SHA256.hash(
+            data: Array(origin.utf8) + [0x0A, 0xFF] + Array("PKIX-RSA-PKCS#1v1.5".utf8)
+                + Array(verifier.publicKey.pkixBytes))
+    }
+    return digest.prefix(4).reduce(UInt32(0)) { $0 << 8 | UInt32($1) }
+}
+
+/// sumdb `isValidName`.
+func isValidNoteName(_ name: String) -> Bool {
+    !name.isEmpty && !name.unicodeScalars.contains { $0.properties.isWhitespace } && !name.contains("+")
+}
+
+/// A signed note opened by `openNote`. Mirrors sumdb `note.Note`.
+public struct OpenedNote: Sendable {
+    /// The signed text, including its trailing newline.
+    public var text: String
+    /// Names and key hashes of the verified signatures.
+    public var verifiedSignatures: [(name: String, hash: UInt32)]
+    public var unverifiedSignatureCount: Int
+}
+
+/// Mirrors sumdb `note.Open` with a single known verifier: parses the note,
+/// verifies every signature by `verifier` (a bad one is an error), and
+/// requires at least one. Signatures by unknown keys are ignored.
+public func openNote(_ message: String, verifier: NoteVerifier) throws -> OpenedNote {
+    let malformed = SigstoreError("malformed note")
+    // Valid UTF-8 (guaranteed by String) with no non-newline control characters.
+    if message.unicodeScalars.contains(where: { $0.value < 0x20 && $0 != "\n" }) { throw malformed }
+
+    let msg = Array(message.utf8)
+    guard let split = lastIndex(of: [0x0A, 0x0A], in: msg) else { throw malformed }
+    let text = Array(msg[...split])
+    var sigs = msg[(split + 2)...]
+    guard let last = sigs.last, last == 0x0A else { throw malformed }
+
+    let prefix = Array("\u{2014} ".utf8)
+    var seen = Set<String>()
+    var seenUnverified = Set<[UInt8]>()
+    var verified: [(String, UInt32)] = []
+    var unverified = 0
+    var numSig = 0
+    while !sigs.isEmpty {
+        let i = sigs.firstIndex(of: 0x0A)!
+        var line = Array(sigs[..<i])
+        sigs = sigs[(i + 1)...]
+
+        guard line.starts(with: prefix) else { throw malformed }
+        line.removeFirst(prefix.count)
+        let lineString = String(decoding: line, as: UTF8.self)
+        let name: String
+        let b64: String
+        if let space = lineString.firstIndex(of: " ") {
+            name = String(lineString[..<space])
+            b64 = String(lineString[lineString.index(after: space)...])
+        } else {
+            name = lineString
+            b64 = ""
+        }
+        guard !b64.isEmpty, isValidNoteName(name), let decoded = Base64.decode(b64), decoded.count >= 5 else {
+            throw malformed
+        }
+        let sig = Array(decoded)
+        let hash = sig.prefix(4).reduce(UInt32(0)) { $0 << 8 | UInt32($1) }
+
+        numSig += 1
+        if numSig > 100 { throw malformed }
+
+        guard name == verifier.name && hash == verifier.keyHash else {
+            // Unknown verifier: keep (deduplicated) as unverified.
+            if seenUnverified.insert(line).inserted { unverified += 1 }
+            continue
+        }
+        if !seen.insert("\(name)\u{0}\(hash)").inserted { continue }
+        guard verifier.verify(text, Array(sig.dropFirst(4))) else {
+            throw SigstoreError("invalid signature for key \(name)+\(String(format: "%08x", hash))")
+        }
+        verified.append((name, hash))
+    }
+    guard !verified.isEmpty else { throw SigstoreError("note has no verifiable signatures") }
+    return OpenedNote(
+        text: String(decoding: text, as: UTF8.self), verifiedSignatures: verified, unverifiedSignatureCount: unverified)
+}
+
+/// Mirrors transparency-dev/formats `log.Checkpoint`.
+public struct LogCheckpoint: Sendable, Equatable {
+    public var origin: String
+    public var size: UInt64
+    public var hash: [UInt8]
+
+    /// Mirrors `Checkpoint.Unmarshal`: origin, decimal size and base64 root
+    /// hash on the first three lines; any further lines are extension data.
+    public init(text: String) throws {
+        let lines = text.split(separator: "\n", maxSplits: 3, omittingEmptySubsequences: false)
+        guard lines.count >= 4 else { throw SigstoreError("invalid checkpoint - too few newlines") }
+        origin = String(lines[0])
+        guard !origin.isEmpty else { throw SigstoreError("invalid checkpoint - empty origin") }
+        // strconv.ParseUint(s, 10, 64): ASCII digits only, no sign.
+        guard !lines[1].isEmpty, lines[1].allSatisfy({ $0.isASCII && $0.isNumber }), let size = UInt64(lines[1])
+        else {
+            throw SigstoreError("invalid checkpoint - size invalid")
+        }
+        self.size = size
+        guard let h = Base64.decode(String(lines[2])) else {
+            throw SigstoreError("invalid checkpoint - invalid hash")
+        }
+        hash = Array(h)
+    }
+}
+
+/// Mirrors `log.ParseCheckpoint` with only the log's verifier: opens the
+/// note, then requires the checkpoint origin to equal `verifier.name`.
+public func parseCheckpoint(_ checkpoint: String, verifier: NoteVerifier) throws -> LogCheckpoint {
+    let note: OpenedNote
+    do {
+        note = try openNote(checkpoint, verifier: verifier)
+    } catch {
+        throw SigstoreError("failed to verify signatures on checkpoint", underlying: error)
+    }
+    guard note.verifiedSignatures.contains(where: { $0.name == verifier.name && $0.hash == verifier.keyHash }) else {
+        throw SigstoreError("no log signature found on note")
+    }
+    let cp: LogCheckpoint
+    do {
+        cp = try LogCheckpoint(text: note.text)
+    } catch {
+        throw SigstoreError("failed to unmarshal checkpoint", underlying: error)
+    }
+    guard cp.origin == verifier.name else {
+        throw SigstoreError("got Origin \"\(cp.origin)\" but expected \"\(verifier.name)\"")
+    }
+    return cp
+}
+
+/// Mirrors rekor-tiles `verify.VerifyLogEntryWithHash`: verifies the
+/// entry's signed checkpoint, then the inclusion of `entryHash` (an RFC
+/// 6962 leaf hash) at the entry's log index under the checkpoint's root.
+/// The proof's own root hash and tree size are not used.
+public func verifyLogEntryWithHash(
+    _ tle: Dev_Sigstore_Rekor_V1_TransparencyLogEntry, verifier: NoteVerifier, entryHash: [UInt8]
+) throws {
+    let cp: LogCheckpoint
+    do {
+        cp = try parseCheckpoint(tle.inclusionProof.checkpoint.envelope, verifier: verifier)
+    } catch {
+        throw SigstoreError("unverified checkpoint signature", underlying: error)
+    }
+    guard tle.logIndex >= 0 else { throw SigstoreError("invalid index: \(tle.logIndex)") }
+    do {
+        try Merkle.verifyInclusion(
+            index: UInt64(tle.logIndex), size: cp.size, leafHash: entryHash,
+            proof: tle.inclusionProof.hashes.map { Array($0) }, root: cp.hash)
+    } catch {
+        throw SigstoreError("verifying inclusion", underlying: error)
+    }
+}
+
+private func lastIndex(of needle: [UInt8], in haystack: [UInt8]) -> Int? {
+    guard haystack.count >= needle.count else { return nil }
+    var i = haystack.count - needle.count
+    while i >= 0 {
+        if haystack[i] == needle[0] && Array(haystack[i..<(i + needle.count)]) == needle { return i }
+        i -= 1
+    }
+    return nil
+}
+
+// MARK: - hashedrekord 0.0.2 entry hash (rekor-tiles pkg/types/hashedrekord)
+
+/// Hash type of a `PublicKeyDetails` (sigstore `GetAlgorithmDetails(...)
+/// .GetProtoHashType()`), for the algorithms that prehash. Throws for
+/// details without a registered algorithm.
+public func protoHashType(
+    _ details: Dev_Sigstore_Common_V1_PublicKeyDetails
+) throws -> Dev_Sigstore_Common_V1_HashAlgorithm {
+    switch details {
+    case .pkixEcdsaP256Sha256, .pkixRsaPkcs1V152048Sha256, .pkixRsaPkcs1V153072Sha256,
+        .pkixRsaPkcs1V154096Sha256, .pkixRsaPss2048Sha256, .pkixRsaPss3072Sha256, .pkixRsaPss4096Sha256,
+        .pkixEcdsaP384Sha256, .pkixEcdsaP521Sha256:
+        return .sha2256
+    case .pkixEcdsaP384Sha384:
+        return .sha2384
+    case .pkixEcdsaP521Sha512, .pkixEd25519Ph:
+        return .sha2512
+    case .pkixEd25519, .mlDsa44, .mlDsa65, .mlDsa87:
+        return .unspecified  // signs the message, not a digest
+    default:
+        throw SigstoreError("getting key algorithm details: unsupported algorithm \(details)")
+    }
+}
+
+/// Mirrors rekor-tiles `hashedrekord.ToEntryHash`: the RFC 6962 leaf hash
+/// of the JCS-canonicalized protojson of the hashedrekord 0.0.2 entry that
+/// Rekor v2 would log for (`digest`, `signature`).
+public func hashedRekordEntryHash(
+    digest: [UInt8], signature: Dev_Sigstore_Rekor_V2_Signature
+) throws -> [UInt8] {
+    var entry = Dev_Sigstore_Rekor_V2_Entry()
+    entry.kind = "hashedrekord"
+    entry.apiVersion = "0.0.2"
+    var hr = Dev_Sigstore_Rekor_V2_HashedRekordLogEntryV002()
+    hr.data.digest = Data(digest)
+    hr.data.algorithm = try protoHashType(signature.verifier.keyDetails)
+    hr.signature = signature
+    entry.spec.spec = .hashedRekordV002(hr)
+
+    let serialized: Data
+    do {
+        serialized = try entry.jsonUTF8Data()
+    } catch {
+        throw SigstoreError("marshaling reconstructed entry", underlying: error)
+    }
+    let canonicalized: Data
+    do {
+        canonicalized = try JSONCanonicalizer.transform(serialized)
+    } catch {
+        throw SigstoreError("canonicalizing reconstructed entry", underlying: error)
+    }
+    return Merkle.hashLeaf(canonicalized)
+}
