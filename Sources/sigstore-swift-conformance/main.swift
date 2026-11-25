@@ -51,19 +51,19 @@ let usage = """
       sigstore-swift-conformance verify-bundle [--staging] --bundle FILE --key PATH_TO_KEY [--trusted-root FILE] FILE_OR_DIGEST
     """
 
-func loadTrustedRoot(_ args: Arguments) throws -> TrustedRoot {
+/// Mirrors sigstore-go's `getTrustedRoot`: a file given with
+/// `--trusted-root`, else `trusted_root.json` from the public-good (or, with
+/// `--staging`, staging) TUF repository.
+func loadTrustedRoot(_ args: Arguments) async throws -> TrustedRoot {
     if let path = args.trustedRootPath {
         return try TrustedRoot(path: path)
     }
-    // sigstore-go fetches these via TUF; until SigstoreTUF exists we use
-    // embedded copies.
+    var opts = SigstoreTUF.Options()
     if args.staging {
-        guard let url = Bundle.module.url(forResource: "staging_trusted_root", withExtension: "json") else {
-            throw SigstoreError("embedded staging trusted root not found")
-        }
-        return try TrustedRoot(json: Data(contentsOf: url))
+        opts = opts.withRoot(stagingRoot()).withRepositoryBaseURL(stagingMirror)
     }
-    return try TrustedRoot.embeddedPublicGood()
+    let client = try await Client(options: opts)
+    return try TrustedRoot(json: try await client.getTarget(defaultTrustedRootTarget))
 }
 
 func verifyBundle(_ args: Arguments) async throws {
@@ -82,7 +82,7 @@ func verifyBundle(_ args: Arguments) async throws {
 
     var identityPolicies: [PolicyOption] = []
     var verifierConfig: [VerifierOption] = []
-    let root = try loadTrustedRoot(args)
+    let root = try await loadTrustedRoot(args)
     var tr: any TrustedMaterial = root
 
     if let keyPath = args.keyPath {

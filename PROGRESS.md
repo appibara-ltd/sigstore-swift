@@ -2,12 +2,12 @@
 
 Continuity log. Update at the end of every session.
 
-## Status (2026-11-25, session 1, part 4)
+## Status (2026-11-25, session 1, part 5)
 
-**Rekor v2 verification implemented (uncommitted); every conformance verify
-test passes with no expected failures.** `main` (6268aee) has RFC 3161 and a
-macOS/Linux/Windows CI matrix, all green (run 45665092861). `swift test`:
-79 tests pass on macOS.
+**TUF client implemented (uncommitted).** `main` (158dec7) has Rekor v2 with
+every conformance verify test passing; CI green (run 45670812593, Windows
+on its second attempt, see Spec questions). `swift test`: 102 tests pass on
+macOS.
 
 ### Conformance (sigstore-conformance, verify tests only)
 
@@ -26,11 +26,10 @@ re-checked by running the client on the asset dir: each is rejected for the
 defect it targets, except `rekor2-timestamp-with-incorrect-time_fail`
 (see Spec questions: rejected at bundle parsing, before the timestamp check).
 
-When no `--trusted-root` is given, the client uses the embedded public-good
-root, or with `--staging` an embedded staging root
-(`Sources/sigstore-swift-conformance/Resources/staging_trusted_root.json`,
-`sigstore/root-signing-staging` `targets/trusted_root.json` @ main, sha256
-`44deb991…6ed8`, fetched 2026-11-25). sigstore-go fetches both via TUF.
+When no `--trusted-root` is given, the client fetches `trusted_root.json`
+over TUF from the public-good repository, or with `--staging` the staging
+one, as sigstore-go's client does (no cache validity, so every invocation
+refreshes: the suite takes ~80 s instead of ~20 s).
 
 The appitool v0.11.0 SLSA provenance bundle (`appitool-darwin-arm64.tar.gz`,
 sha256 `b5eeec2e…f0ce`) verifies against the embedded public-good trusted root
@@ -62,6 +61,22 @@ and a policy of artifact digest + OIDC issuer
   certificate validity, duplicate-entry and entry-count limits.
 - in-toto statement: subject digest vs artifact digest(s) or artifact bytes;
   subject/digest limits; predicate parsed to `Google_Protobuf_Struct`.
+- TUF client (`Sources/SigstoreTUF`, port of sigstore-go `pkg/tuf` over
+  go-tuf v2.4.2 `metadata`, `trustedmetadata`, `updater`, `config`,
+  `fetcher`): root rotation (each new root signed by the old and new root
+  role thresholds, version + 1, at most 256 rotations, stop on 404),
+  timestamp/snapshot/targets with expiry against a fixed reference time,
+  rollback checks (timestamp, snapshot meta versions), length/hash checks
+  against the delegating metadata, threshold counted over distinct keys
+  (PKIX fingerprint), duplicate-signature and `_type` checks, consistent
+  snapshots (version-prefixed metadata, hash-prefixed targets), delegations
+  (pre-order walk, terminating roles, `filepath.Match` paths, hash-prefix
+  and succinct-role bins), max lengths, on-disk cache (`~/.sigstore/root`,
+  same layout as sigstore-go) with `cacheValidity` / `forceCache`, and
+  OLPC canonical JSON. Key types: ecdsa (P-256/384), ed25519, rsa (PSS).
+  Verified live against `tuf-repo-cdn.sigstore.dev` and
+  `tuf-repo.github.com` (gh's root v3 → v9). `fetchTrustedRoot()`,
+  `fetchTrustedRootWithOptions(_:)`, `getTrustedRoot(_:)` in SigstoreRoot.
 - RFC 3161 signed timestamps (`Sources/SigstoreRoot/RFC3161.swift`, port of
   timestamp-authority v2.2.0 `pkg/verification` + digitorus `timestamp` /
   `pkcs7` at sigstore-go's pins): TimeStampResp status, CMS SignedData
@@ -95,7 +110,9 @@ and a policy of artifact digest + OIDC issuer
   either).
 - Rekor v2: ML-DSA log keys (cosignature/v1 note framing), RSA-PSS
   signing keys (sigstore-go's default details never pick PSS either).
-- TUF client (`SigstoreTUF` holds only `Options`); trusted root is embedded.
+- TUF: `LiveTrustedRoot` (periodic refresh), go-tuf `multirepo`, RSA-PSS
+  keys with salt lengths other than the digest length (swift-crypto
+  verifies PSS with salt = digest length; Go accepts any).
 - Message signatures over a digest only: ECDSA done (prehashed `Digest`
   wrapper); RSA not (swift-crypto RSA rejects foreign digest types).
   Ed25519ph; ML-DSA tlog keys.
@@ -127,23 +144,35 @@ entries.
 Negative TSA tests build tokens with a throwaway PKI (`TestTSA` in
 `TimestampAuthorityTests.swift`).
 
+`Sources/SigstoreTUF/Resources/{root,staging_root}.json` are sigstore-go
+v1.4.1 `pkg/tuf/repository/` (sha256 `f1560a64…b96c` / `baf71cd3…2875`).
+
+`Tests/SigstoreTests/Fixtures/tuf-repo.github.com/` is GitHub's TUF
+repository captured 2026-11-25: `3.root.json` is `gh`'s embedded root
+(cli/cli `pkg/cmd/attestation/verification/embed/tuf-repo.github.com/root.json`
+@ `4618a267`, sha256 `98cba97b…1a8d`), `4`–`9.root.json`, `timestamp.json`
+(v1026, expires 2026-12-02), `84.snapshot.json`, `10.targets.json` and the
+hash-prefixed `trusted_root.json`. Tests pin the reference time to
+2026-11-26. Negative TUF tests use a synthetic signed repository
+(`TestTUFRepo` in `TUFTests.swift`).
+
 `Sources/SigstoreRoot/Resources/trusted_root.json` (also copied to test
 fixtures) is `sigstore/root-signing` `targets/trusted_root.json` @ main,
 sha256 `6494e21e…0b66`, fetched 2026-11-25.
 
 ## Next steps (toward conformance)
 
-1. **CI**: confirm the Rekor v2 commit is green, including the conformance
-   action with an empty xfail input.
-2. **GitHub trusted root for consumers**: ship or fetch (TUF,
-   `tuf-repo.github.com`) GitHub's trusted root so appitool can verify
-   release attestations; tests use a fixture copy only.
+1. **CI**: confirm the TUF commit is green (conformance now needs network
+   for TUF; Windows no longer builds a conformance resource bundle).
+2. **appitool**: embed `gh`'s GitHub TUF root and fetch GitHub's trusted
+   root with `Options().withRoot(...).withRepositoryBaseURL(
+   "https://tuf-repo.github.com")`, as `gh` does (sigstore-go has no
+   GitHub-specific code).
 3. **Base64 leniency**: Go's protojson accepts `\n`/`\r` inside base64
    bytes fields (`base64.StdEncoding` skips them); swift-protobuf rejects
    them (see Spec questions). Decide whether to match.
-4. **TUF client** (`pkg/tuf`): root rotation, timestamp/snapshot/targets,
-   delegations, consistent snapshots, on-disk cache; embedded root.json for
-   the public-good and GitHub repos; `TrustedRoot.fetch()` / live refresh.
+4. `LiveTrustedRoot`; decide whether `TrustedRoot.embeddedPublicGood()`
+   should stay (sigstore-go has no embedded trusted root).
 5. Prehashed signature verification (message signatures with digest only),
    Ed25519ph, ML-DSA, `SigningConfig`, `VerificationResult` JSON.
 6. Fuzz/property tests for parsers (bundle, Rekor bodies, CMS/TSTInfo), then a
@@ -191,8 +220,22 @@ sha256 `6494e21e…0b66`, fetched 2026-11-25.
 - `.gitattributes` marks fixtures and embedded trust roots `-text`: the
   first Windows run checked out the conformance `artifact` with CRLF, so its
   digest no longer matched the signed statement.
-- TUF cache paths must stay portable when `SigstoreTUF` lands (sigstore-go
-  uses `filepath.Join`).
+- TUF cache paths are joined with Foundation URLs (platform separators),
+  as sigstore-go uses `filepath.Join`.
+- TUF signatures are checked over the OLPC canonical JSON of the received
+  `signed` object (go-tuf canonicalizes its re-marshalled structs; the same
+  bytes for well-formed metadata). Metadata go-tuf could never re-marshal
+  (both `paths` and `path_hash_prefixes`, or both `roles` and
+  `succinct_roles`) is rejected at parse. A timestamp without
+  `snapshot.json` meta is an error (Go would nil-dereference).
+- `tuf.Client` is an actor; `Options` uses `with...` copies; the fetcher is
+  async (`URLSession`) with up to 3 attempts on transport errors, 429 and
+  5xx (sigstore-go uses an httpretry client). Downloads are size-checked
+  after completion, not streamed with a limit.
+- Consistent-snapshot target paths prefer the sha256 hash (Go picks an
+  arbitrary map entry).
+- The conformance client fetches trusted roots over TUF like sigstore-go;
+  the embedded staging trusted root was removed.
 - Conformance CI is pinned to sigstore-conformance v0.0.29 (as sigstore-go);
   verify tests only (`skip-signing`), no staging run until signing exists.
 - Rekor v1 `intoto` 0.0.2 signatures decode leniently like Go (bad inner
@@ -238,6 +281,11 @@ sha256 `6494e21e…0b66`, fetched 2026-11-25.
   base64 decoder skips newlines) and then rejects the timestamp; we reject
   the bundle as malformed JSON bytes. Same verdict, different reason; the
   targeted check is covered by `intoto-tsa-timestamp-outside-cert-validity_fail`.
+- go-tuf matches `path_hash_prefixes` against base64url(sha256(path)); the
+  TUF spec uses the hex digest. Mirrored; worth raising upstream.
+- The Windows CI build once failed when swift-build touched the
+  conformance resource bundle directory (`copy /b <dir> +,,`); it passed on
+  rerun. That bundle no longer exists.
 - `CodeSigningPolicy` (Fulcio) skips the root's EKU, but Go's
   `checkChainForKeyUsage` checks every certificate including the root
   (`TimestampingPolicy` does). Harmless for current Fulcio roots (no EKU);

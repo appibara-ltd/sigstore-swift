@@ -52,6 +52,7 @@ let package = Package(
             dependencies: [
                 "SigstoreProtobufSpecs",
                 "SigstoreCommon",
+                "SigstoreTUF",
                 .product(name: "Crypto", package: "swift-crypto"),
                 .product(name: "_CryptoExtras", package: "swift-crypto"),
                 .product(name: "SwiftASN1", package: "swift-asn1"),
@@ -71,8 +72,17 @@ let package = Package(
                 .product(name: "X509", package: "swift-certificates"),
             ]
         ),
-        // Mirrors sigstore-go pkg/tuf (stub).
-        .target(name: "SigstoreTUF"),
+        // Mirrors sigstore-go pkg/tuf (with go-tuf v2's metadata/updater).
+        .target(
+            name: "SigstoreTUF",
+            dependencies: [
+                "SigstoreCommon",
+                .product(name: "Crypto", package: "swift-crypto"),
+                .product(name: "_CryptoExtras", package: "swift-crypto"),
+                .product(name: "X509", package: "swift-certificates"),
+            ],
+            resources: [.copy("Resources/root.json"), .copy("Resources/staging_root.json")]
+        ),
         // Mirrors sigstore-go pkg/verify.
         .target(
             name: "SigstoreVerify",
@@ -120,8 +130,7 @@ let package = Package(
             dependencies: [
                 "Sigstore",
                 .product(name: "X509", package: "swift-certificates"),
-            ],
-            resources: [.copy("Resources/staging_trusted_root.json")]
+            ]
         ),
         .testTarget(
             name: "SigstoreTests",
