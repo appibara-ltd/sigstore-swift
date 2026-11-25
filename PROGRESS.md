@@ -4,9 +4,8 @@ Continuity log. Update at the end of every session.
 
 ## Status (2026-11-25, session 1, part 3)
 
-**RFC 3161 timestamp verification implemented (uncommitted).** `main` (6a0c4dd)
-has v0.1 + the conformance harness; CI (run 45624529665) is green on Linux,
-macOS (swiftly Swift 6.4.3) and conformance. `swift test`: 55 tests pass on
+**RFC 3161 timestamp verification is on `main` (7de56b3).** CI (run
+45652157739) is green on Linux, macOS (swiftly Swift 6.4.3) and conformance. `swift test`: 55 tests pass on
 macOS.
 
 ### Conformance (sigstore-conformance, verify tests only)
@@ -121,7 +120,9 @@ sha256 `6494e21e…0b66`, fetched 2026-11-25.
 
 ## Next steps (toward conformance)
 
-1. **CI**: confirm the RFC 3161 commit is green.
+1. **CI**: RFC 3161 commit 7de56b3 green (run 45652157739). `actions/checkout`
+   pinned to v7.0.1 (Node 24) to drop the Node 20 deprecation warning;
+   confirm the next run has no warning.
 2. **GitHub trusted root for consumers**: ship or fetch (TUF,
    `tuf-repo.github.com`) GitHub's trusted root so appitool can verify
    release attestations; tests use a fixture copy only.
