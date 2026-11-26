@@ -76,6 +76,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The seed corpus is extracted from fixtures with python3, which the
+      # swift image lacks.
+      - name: Install python3
+        run: apt-get update -qq && apt-get install -y -qq python3 >/dev/null
       - name: Fuzz
         env:
           FUZZ_SECONDS: ${{ github.event_name == 'schedule' && '900' || '30' }}

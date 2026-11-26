@@ -8,6 +8,8 @@
 # Crashes and slow inputs are written to .build/fuzz/artifacts/<target>/.
 set -euo pipefail
 
+command -v python3 >/dev/null || { echo "fuzz.sh needs python3 (seed extraction)" >&2; exit 1; }
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/.build/fuzz"
 SECONDS_PER_TARGET="${FUZZ_SECONDS:-30}"
