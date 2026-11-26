@@ -2,17 +2,17 @@
 
 Continuity log. Update at the end of every session.
 
-## Status (2026-11-25, session 1, part 9)
+## Status (2026-11-26, session 1, part 10)
 
-**Verify-side parity work with sigstore-go v1.4.1 (uncommitted).** Added
-pure-Swift ML-DSA (44/65/87), Ed25519ph and RSA-over-digest verification,
-`LiveTrustedRoot`, `VerificationResult` JSON (byte-for-value equal to
-sigstore-go's output on two real bundles), strict in-toto statements from
-generated protos, `BundleV2` and the v2 verifier API, Go's `path.Match`,
-and a libFuzzer harness (Linux/CI only, not yet run). `main` (9abae8f) has
-0.1.0 + docs. `swift test`: 174 tests pass on macOS (main suite 135,
-ML-DSA 24, crypto extras 15); conformance 135/135 (pin) and 141/141
-(suite main).
+**Verify-side parity with sigstore-go v1.4.1 is on `main` (9d4186e).** CI
+run 45787953354 is green on all five jobs: macOS, Linux, Windows,
+conformance and the first full fuzz run (30 s per target, ~1.8M inputs in
+total, no crash, hang or invariant failure). `swift test`: 174 tests;
+conformance 135/135 (pin) and 141/141 (suite main).
+
+Fuzz, first run (inputs in 30 s): json 65k, protojson 82k, bundle 28k,
+trustedroot 28k, statement 228k, rfc3161 277k, note 182k, tuf 22k,
+pathmatch 360k, mldsa 852k.
 
 Platform: macOS 26 or later (`platforms: [.macOS(.v26)]`, raised from 13
 after 0.1.0 at the user's request), Linux, Windows. CI tests the latest
@@ -201,10 +201,9 @@ hash-prefixed `trusted_root.json`. Tests pin the reference time to
 
 ## Next steps
 
-1. **CI**: first run of the parity commit, including the new `fuzz` job
-   (the harness has never been compiled: Linux-only).
-2. Fix whatever fuzzing finds; then a security review before announcing
-   (focus: the four hand-written primitives and parsers).
+1. Watch the weekly 15-min-per-target fuzz runs; then a security review
+   before announcing (focus: the hand-written primitives — ML-DSA,
+   Ed25519ph, RSA — and parsers).
 3. **appitool**: embed `gh`'s GitHub TUF root and fetch GitHub's trusted
    root with `Options().withRoot(...).withRepositoryBaseURL(
    "https://tuf-repo.github.com")`, as `gh` does; replace `gh attestation
