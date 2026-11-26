@@ -267,7 +267,12 @@ hash-prefixed `trusted_root.json`. Tests pin the reference time to
   RSA PKCS#1 v1.5/PSS over a digest). Verification only. Deviations, all
   fail-closed: Ed25519 key encodings are decoded strictly per RFC 8032
   §5.1.3 (Go's `SetBytes` accepts y ≥ p and x = 0 with the sign bit); RSA
-  moduli above 16384 bits are rejected (Go: no upper bound); PSS
+  moduli above 8192 bits are rejected (Go `crypto/rsa`: no upper bound).
+  That limit comes from swift-crypto's BoringSSL
+  (`OPENSSL_RSA_MAX_MODULUS_BITS` = 8192, checked in
+  `rsa_check_public_key`), which every RSA key passes through
+  (`_RSA.Signing.PublicKey`, swift-certificates); `SigstoreCryptoExtras`'
+  own cap of 16384 bits is never the binding one. Sigstore uses 2048–4096; PSS
   `saltLength: 0` means exactly zero (Go's 0 means auto; we use `nil`).
 - `SigstorePublicKey` (classical `Certificate.PublicKey` or ML-DSA)
   replaces `Certificate.PublicKey` in `SignatureVerifier.publicKey`,

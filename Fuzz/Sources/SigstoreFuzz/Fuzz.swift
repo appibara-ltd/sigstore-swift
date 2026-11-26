@@ -50,7 +50,7 @@ public func fuzz(_ start: UnsafeRawPointer, _ count: Int) -> CInt {
             _ = try? b.timestamps()
             _ = try? b.signatureContent()
             _ = try? b.verificationContent()
-            _ = try? b.jsonData()
+            _ = try? b.marshalJSON()
         }
         _ = try? BundleV2(json: data)
     case .trustedroot:
