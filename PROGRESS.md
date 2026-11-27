@@ -4,7 +4,8 @@ Continuity log. Update at the end of every session.
 
 ## Status (2026-11-27, session 1, part 15)
 
-Since 0.2.0 (unreleased): `SigningConfig` (`pkg/root`) ported; BER
+**0.3.0 released (tag on 84f6869, CI run 46046670473 green on all six
+jobs).** New since 0.2.0: `SigningConfig` (`pkg/root`) ported; BER
 TimeStampTokens accepted (pkcs7 `ber2der`); test data embedded instead of
 resource bundles (no target has one now); signed attributes verified over
 the sorted DER SET as pkcs7 does; the Fulcio code-signing EKU check now
@@ -305,8 +306,8 @@ v1.4.1 `examples/signing_config.v0.2.json` (Apache-2.0), sha256
 
 Done: 0.2.0 tagged and released; appitool `self-update` integration
 (embedded GitHub TUF root, sigstore-swift first, `gh` cross-check);
-`SigningConfig` (`pkg/root`), BER TimeStampTokens and embedded test data,
-unreleased.
+`SigningConfig` (`pkg/root`), BER TimeStampTokens, embedded test data,
+sorted signed attributes and the root EKU check, released as 0.3.0.
 
 1. **Hardening before announcing.** Watch the weekly fuzz runs (Mondays
    03:00 UTC, 15 min per target). Then a security review, with a human
