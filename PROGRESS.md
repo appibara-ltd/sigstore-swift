@@ -313,10 +313,12 @@ sorted signed attributes and the root EKU check, released as 0.3.0.
    03:00 UTC, 15 min per target). Then a security review, with a human
    review of the hand-written cryptography (ML-DSA, Ed25519ph, RSA) and
    the parsers (protojson, DER/CMS, signed notes, TUF metadata).
-2. **Repository hygiene as in sigstore-go**, whose workflows include
-   `scorecard.yml` (OpenSSF Scorecard), `codeql.yml` and `depsreview.yml`:
-   add Scorecard, a SAST job, dependency review, `SECURITY.md`,
-   Dependabot, and pin actions by SHA.
+2. **Repository hygiene as in sigstore-go**: added `scorecard.yml`,
+   `codeql.yml`, `depsreview.yml`, `.github/dependabot.yml` and
+   `SECURITY.md`; actions were already pinned by SHA. Left: the user
+   enables private vulnerability reporting and Dependabot alerts in the
+   repository settings; confirm the first Scorecard, CodeQL and Dependabot
+   runs; add `swift` to CodeQL once it supports Swift 6.4.
 3. **ML-DSA in X.509 certificates**, the only remaining verify gap
    (experimental, private deployments only; see "ML-DSA in X.509" above):
    upstream route (user decision, 2026-11-27; not yet). Follow or help
@@ -331,6 +333,18 @@ sorted signed attributes and the root EKU check, released as 0.3.0.
 
 ## Decisions
 
+- Repository hygiene mirrors sigstore-go's `scorecard.yml`, `codeql.yml`,
+  `depsreview.yml` and `dependabot.yml`, with these differences:
+  - sigstore-go calls sigstore/community reusable workflows at `@main`;
+    their steps are inlined here, pinned by SHA (same Scorecard settings,
+    `fail-on-severity: high`, GPL-3.0/AGPL-3.0/LGPL-3.0 denied).
+  - CodeQL analyses `actions` only. CodeQL supports Swift 5.4-6.3
+    (github/codeql `supported-versions-compilers.rst`) and Package.swift
+    needs tools 6.4.
+  - Dependabot uses the `swift` ecosystem in place of `gomod`.
+  - `SECURITY.md` points to GitHub private vulnerability reporting, and
+    sends Sigstore issues to security@sigstore.dev (sigstore/.github
+    `SECURITY.md`).
 - Minimum macOS is 26 (after 0.1.0, user decision): no support for older
   macOS. Linux and Windows unchanged.
 - Verify-only first; signing later.
