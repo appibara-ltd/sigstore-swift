@@ -2,12 +2,14 @@
 
 Continuity log. Update at the end of every session.
 
-## Status (2026-11-27, session 1, part 14)
+## Status (2026-11-27, session 1, part 15)
 
 Since 0.2.0 (unreleased): `SigningConfig` (`pkg/root`) ported; BER
 TimeStampTokens accepted (pkcs7 `ber2der`); test data embedded instead of
 resource bundles (no target has one now); signed attributes verified over
-the sorted DER SET as pkcs7 does. `swift test`: 202 tests.
+the sorted DER SET as pkcs7 does; the Fulcio code-signing EKU check now
+covers the root, as Go's. `swift test`: 204 tests. The only verify gap
+left is ML-DSA in X.509 certificates (deferred, see Next steps).
 
 **Verify-side parity with sigstore-go v1.4.1 is released as 0.2.0
 (922063b).** CI run 45795632671 on that commit is green on all five jobs:
@@ -82,8 +84,10 @@ and a policy of artifact digest + OIDC issuer
 - DSSE PAE + signature (ECDSA P-256/384/521, Ed25519, RSA PKCS#1 v1.5),
   exactly one signature, v0.1–v0.3 P-384/P-521 SHA-256 compat.
 - Fulcio chain: RFC 5280 path validation (swift-certificates) at each
-  observer time, code-signing EKU, CA `validFor` window, intermediates from
-  bundle (v0.3 + `.withAllowCertificateChain()`).
+  observer time, code-signing EKU on every certificate that lists EKUs,
+  root included (Go `checkChainForKeyUsage`; the root used to be skipped,
+  fixed 2026-11-27), CA `validFor` window, intermediates from bundle (v0.3
+  + `.withAllowCertificateChain()`).
 - Fulcio OID extensions (1.3.6.1.4.1.57264.1.1–22), SAN (URI, email,
   OtherName), `CertificateIdentity` matching (exact/regex SAN and issuer,
   extension equality).
@@ -460,7 +464,3 @@ unreleased.
   client, SigstoreTUF and, on 2026-11-27 (run 46034322298), the
   SigstoreCryptoExtrasTests test bundle. No target has resource bundles
   any more (test data is embedded too). Worth reporting to swift-build.
-- `CodeSigningPolicy` (Fulcio) skips the root's EKU, but Go's
-  `checkChainForKeyUsage` checks every certificate including the root
-  (`TimestampingPolicy` does). Harmless for current Fulcio roots (no EKU);
-  align it in a follow-up.

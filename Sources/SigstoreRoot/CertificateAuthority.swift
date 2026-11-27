@@ -65,8 +65,10 @@ public struct FulcioCertificateAuthority: CertificateAuthority {
 }
 
 /// Requires the code-signing extended key usage, following Go's
-/// `x509.Certificate.Verify` semantics: the leaf must list codeSigning (or
-/// anyExtendedKeyUsage); intermediates that carry an EKU extension must too.
+/// `x509.Certificate.Verify` (`checkChainForKeyUsage`): every certificate
+/// in the chain, root included, that lists any EKU must list codeSigning
+/// or anyExtendedKeyUsage. A missing or empty EKU extension imposes no
+/// restriction.
 ///
 /// It also declares SubjectAlternativeName and ExtendedKeyUsage as handled
 /// critical extensions (Go's x509 parses both natively; Fulcio marks SAN
@@ -78,16 +80,16 @@ struct CodeSigningPolicy: VerifierPolicy {
     ]
 
     func chainMeetsPolicyRequirements(chain: UnverifiedCertificateChain) async -> PolicyEvaluationResult {
-        // Root (last) is a trust anchor; Go does not check its EKU.
-        for (index, cert) in chain.dropLast().enumerated() {
+        // Go walks the whole chain, the root (last) included.
+        for (index, cert) in chain.enumerated() {
             let eku: ExtendedKeyUsage?
             do {
                 eku = try cert.extensions.extendedKeyUsage
             } catch {
                 return .failsToMeetPolicy(reason: "invalid extended key usage extension: \(error)")
             }
-            // Go treats a missing EKU extension as "any".
-            guard let eku else { continue }
+            // Go treats a missing or empty EKU extension as unrestricted.
+            guard let eku, eku.count > 0 else { continue }
             if !(eku.contains(.codeSigning) || eku.contains(.any)) {
                 return .failsToMeetPolicy(
                     reason: "certificate at chain position \(index) does not permit code signing"
