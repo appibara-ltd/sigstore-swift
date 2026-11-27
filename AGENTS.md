@@ -27,17 +27,22 @@ at the end of every session.
   - Deviations are listed in `PROGRESS.md` → Decisions.
 - Security-sensitive code: never weaken a check to make a test pass. Every new
   check needs a negative test.
-- Generated code in `Sources/SigstoreProtobufSpecs/Generated` and
-  `Sources/SigstoreTUF/EmbeddedRoots.swift` is never edited by hand; change
-  `scripts/generate-protos.sh` / `scripts/embed-tuf-roots.sh` (or their
-  inputs) and regenerate.
-- Library targets have no SwiftPM resource bundles (they make swift-build
-  on Windows flaky); embed data via a generator script.
+- Generated code in `Sources/SigstoreProtobufSpecs/Generated`,
+  `Sources/SigstoreTUF/EmbeddedRoots.swift` and
+  `Tests/*/EmbeddedTestData.swift` is never edited by hand; change
+  `scripts/generate-protos.sh` / `scripts/embed-tuf-roots.sh` /
+  `scripts/embed-test-data.sh` (or their inputs) and regenerate. CI fails
+  when the embedded TUF roots or test data are out of date.
+- No target, library or test, has a SwiftPM resource bundle (they make
+  swift-build on Windows flaky); embed data via a generator script. Test
+  data lives in `Tests/SigstoreTests/Fixtures` and the test targets'
+  `Vectors` directories: after changing any file there, run
+  `scripts/embed-test-data.sh`.
 
 ## Allowed without asking
 
 - `swift build`, `swift test`, `swift package resolve`
-- `scripts/generate-protos.sh`, `scripts/embed-tuf-roots.sh`
+- `scripts/generate-protos.sh`, `scripts/embed-tuf-roots.sh`, `scripts/embed-test-data.sh`
 - read-only `git` commands (`status`, `diff`, `log`, `show`, `blame`)
 - the sigstore-conformance harness, once added
 

@@ -13,8 +13,7 @@ private final class RefreshLog: Sendable {
 }
 
 private func fixture(_ name: String) throws -> Data {
-    let url = try #require(Foundation.Bundle.module.url(forResource: name, withExtension: "json", subdirectory: "Fixtures"))
-    return try Data(contentsOf: url)
+    try Fixtures.file("\(name).json")
 }
 
 private func waitUntil(_ condition: () -> Bool) async throws {

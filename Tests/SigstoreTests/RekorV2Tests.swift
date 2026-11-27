@@ -15,11 +15,7 @@ private enum RekorV2Fixture: String {
     static let logHost = "log2025-alpha1.rekor.sigstage.dev"
 
     func data(_ name: String) throws -> Data {
-        guard
-            let url = Foundation.Bundle.module.url(
-                forResource: name, withExtension: nil, subdirectory: "Fixtures/conformance/\(rawValue)")
-        else { throw SigstoreError("fixture \(rawValue)/\(name) not found") }
-        return try Data(contentsOf: url)
+        try Fixtures.file("conformance/\(rawValue)/\(name)")
     }
 
     func json(_ name: String) throws -> [String: Any] {

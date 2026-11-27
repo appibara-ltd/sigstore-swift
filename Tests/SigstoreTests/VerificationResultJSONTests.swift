@@ -8,8 +8,7 @@ import Testing
 @Suite("VerificationResult JSON (sigstore-go parity)")
 struct VerificationResultJSONTests {
     private func goReference(_ name: String) throws -> JSONValue {
-        let url = try #require(Foundation.Bundle.module.url(forResource: name, withExtension: "json", subdirectory: "Fixtures"))
-        return try JSONValue(parsing: Data(contentsOf: url))
+        try JSONValue(parsing: Fixtures.file("\(name).json"))
     }
 
     @Test func provenanceResultMatchesGo() async throws {

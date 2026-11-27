@@ -22,8 +22,7 @@ private let now = Date(timeIntervalSince1970: 1_767_225_600)  // 2026-01-01T00:0
 private let hour: TimeInterval = 3600
 
 private func fixture(_ name: String) throws -> Data {
-    let url = try #require(Foundation.Bundle.module.url(forResource: name, withExtension: "json", subdirectory: "Fixtures"))
-    return try Data(contentsOf: url)
+    try Fixtures.file("\(name).json")
 }
 
 private func expectError(_ prefix: String, sourceLocation: SourceLocation = #_sourceLocation, _ body: () throws -> Void) {
@@ -291,8 +290,11 @@ struct SigningConfigTests {
 
     /// TestNewSigningConfigFromPath: sigstore-go examples/signing_config.v0.2.json.
     @Test func parsesTheSigstoreGoExample() throws {
-        let url = try #require(Foundation.Bundle.module.url(forResource: "signing_config.v0.2", withExtension: "json", subdirectory: "Fixtures"))
-        let sc = try SigningConfig(path: url.path)
+        // NewSigningConfigFromPath: write the fixture out and load it by path.
+        let path = NSTemporaryDirectory() + "signing_config-\(UUID().uuidString).json"
+        try fixture("signing_config.v0.2").write(to: URL(fileURLWithPath: path))
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let sc = try SigningConfig(path: path)
         #expect(sc.fulcioCertificateAuthorityURLs.map(\.url) == ["https://fulcio.sigstore.dev"])
         #expect(sc.oidcProviderURLs.map(\.url) == ["https://oauth2.sigstore.dev/auth"])
         #expect(sc.rekorLogURLs.map(\.url) == ["https://rekor.sigstore.dev"])

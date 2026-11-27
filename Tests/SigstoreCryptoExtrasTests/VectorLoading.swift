@@ -4,10 +4,7 @@ import Foundation
 /// `Vectors/` (see scripts/cryptoextras-vectors).
 enum Vectors {
     static func load<T: Decodable>(_ name: String, as type: T.Type) throws -> T {
-        guard let url = Bundle.module.url(forResource: name, withExtension: "json", subdirectory: "Vectors") else {
-            throw CocoaError(.fileNoSuchFile)
-        }
-        return try JSONDecoder().decode(T.self, from: Data(contentsOf: url))
+        try JSONDecoder().decode(T.self, from: EmbeddedTestData.data("Vectors/\(name).json"))
     }
 }
 

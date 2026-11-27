@@ -11,13 +11,12 @@ enum Fixtures {
     static var artifactDigest: Data { Data(Hex.decode(artifactDigestHex)!) }
 
     static func data(_ name: String) throws -> Data {
-        guard
-            let url = Foundation.Bundle.module.url(
-                forResource: name, withExtension: nil, subdirectory: "Fixtures/appitool-v0.11.0")
-        else {
-            throw SigstoreError("fixture \(name) not found")
-        }
-        return try Data(contentsOf: url)
+        try EmbeddedTestData.data("Fixtures/appitool-v0.11.0/\(name)")
+    }
+
+    /// A file under `Fixtures/` by its path relative to that directory.
+    static func file(_ path: String) throws -> Data {
+        try EmbeddedTestData.data("Fixtures/\(path)")
     }
 
     static func provenanceJSON() throws -> [String: Any] {
@@ -35,11 +34,7 @@ enum Fixtures {
 
     /// Copy of the embedded public-good trusted root, for building variants.
     static func trustedRootProtobuf() throws -> Dev_Sigstore_Trustroot_V1_TrustedRoot {
-        guard
-            let url = Foundation.Bundle.module.url(
-                forResource: "trusted_root", withExtension: "json", subdirectory: "Fixtures")
-        else { throw SigstoreError("trusted_root.json fixture not found") }
-        return try newTrustedRootProtobuf(Data(contentsOf: url))
+        try newTrustedRootProtobuf(file("trusted_root.json"))
     }
 
     /// SAN of GitHub's release attestation signing certificate.
@@ -47,11 +42,7 @@ enum Fixtures {
 
     /// GitHub's Sigstore instance trusted root (`gh attestation trusted-root`).
     static func githubTrustedRoot() throws -> TrustedRoot {
-        guard
-            let url = Foundation.Bundle.module.url(
-                forResource: "github_trusted_root", withExtension: "json", subdirectory: "Fixtures")
-        else { throw SigstoreError("github_trusted_root.json fixture not found") }
-        return try TrustedRoot(json: Data(contentsOf: url))
+        try TrustedRoot(json: file("github_trusted_root.json"))
     }
 
     /// Public-good trusted root snapshot (`Fixtures/trusted_root.json`).

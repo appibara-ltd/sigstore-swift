@@ -66,6 +66,23 @@ jobs:
       - name: Run tests
         run: swift test
 
+  # Embedded data (TUF roots, test fixtures and vectors) must match its
+  # sources: rerun the generators and fail on any difference. (sigstore-go
+  # has check-embedded-root.yml for its embedded TUF roots.)
+  generated:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Regenerate embedded data
+        run: |
+          scripts/embed-tuf-roots.sh
+          scripts/embed-test-data.sh
+      - name: Check for differences
+        run: git diff --exit-code
+
   # libFuzzer over the hand-written parsers (scripts/fuzz.sh): 30 s per
   # target on pushes and PRs, 15 min per target on the weekly schedule.
   fuzz:

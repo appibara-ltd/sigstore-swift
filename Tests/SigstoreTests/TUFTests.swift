@@ -210,14 +210,10 @@ struct TUFTests {
     /// GitHub's TUF repository (`tuf-repo.github.com`), captured 2026-11-25:
     /// starts from `gh`'s embedded root v3 and rotates to v9.
     private func githubFetcher() throws -> (Data, MemoryFetcher) {
-        let dir = try #require(
-            Foundation.Bundle.module.url(forResource: "tuf-repo.github.com", withExtension: nil, subdirectory: "Fixtures"))
+        let dir = "tuf-repo.github.com"
         var files: [String: Data] = [:]
-        for rel in try FileManager.default.subpathsOfDirectory(atPath: dir.path) {
-            var isDir: ObjCBool = false
-            let url = dir.appendingPathComponent(rel)
-            guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), !isDir.boolValue else { continue }
-            files[rel.replacingOccurrences(of: "\\", with: "/")] = try Data(contentsOf: url)
+        for rel in EmbeddedTestData.files(under: "Fixtures/\(dir)") {
+            files[rel] = try Fixtures.file("\(dir)/\(rel)")
         }
         return (files["3.root.json"]!, MemoryFetcher(files))
     }

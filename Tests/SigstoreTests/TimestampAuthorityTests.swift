@@ -10,7 +10,7 @@ import X509
 /// sigstore-conformance `intoto-with-custom-trust-root` (Apache-2.0): a DSSE
 /// bundle with one RFC 3161 timestamp from the conformance mock TSA.
 private enum TSAFixture {
-    static let directory = "Fixtures/conformance/intoto-with-custom-trust-root"
+    static let directory = "conformance/intoto-with-custom-trust-root"
     static let san =
         "https://github.com/sigstore-conformance/extremely-dangerous-public-oidc-beacon/.github/workflows/extremely-dangerous-oidc-beacon.yml@refs/heads/main"
     static let issuer = "https://token.actions.githubusercontent.com"
@@ -18,9 +18,7 @@ private enum TSAFixture {
     static let time = Date(timeIntervalSince1970: 1_675_209_600)
 
     static func data(_ name: String) throws -> Data {
-        guard let url = Foundation.Bundle.module.url(forResource: name, withExtension: nil, subdirectory: directory)
-        else { throw SigstoreError("fixture \(name) not found") }
-        return try Data(contentsOf: url)
+        try Fixtures.file("\(directory)/\(name)")
     }
 
     static func json() throws -> [String: Any] {

@@ -38,12 +38,13 @@ struct ShakeCase: Decodable {
     let output: String
 }
 
-func vectorURL(_ name: String) -> URL? {
-    Bundle.module.url(forResource: name, withExtension: "json", subdirectory: "Vectors")
+func vectorData(_ name: String) throws -> Data {
+    try EmbeddedTestData.data("Vectors/\(name).json")
 }
 
+/// Empty when the file is missing or malformed; tests assert the case counts.
 func loadCases(_ file: String) -> [VectorCase] {
-    guard let url = vectorURL(file), let data = try? Data(contentsOf: url),
+    guard let data = try? vectorData(file),
         let vf = try? JSONDecoder().decode(VectorFile.self, from: data)
     else { return [] }
     return vf.groups.flatMap { g in
@@ -150,8 +151,7 @@ extension DispatchData {
     }
 
     @Test func goCrossCheck() throws {
-        let url = try #require(vectorURL("go-shake"))
-        let cases = try JSONDecoder().decode([ShakeCase].self, from: Data(contentsOf: url))
+        let cases = try JSONDecoder().decode([ShakeCase].self, from: vectorData("go-shake"))
         #expect(cases.count == 60)
         for c in cases {
             let input = hex(c.input)

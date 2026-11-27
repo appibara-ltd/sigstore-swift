@@ -152,12 +152,12 @@ let package = Package(
         .testTarget(
             name: "SigstoreCryptoExtrasTests",
             dependencies: ["SigstoreCryptoExtras", .product(name: "Crypto", package: "swift-crypto")],
-            resources: [.copy("Vectors")]
+            exclude: ["Vectors"]
         ),
         .testTarget(
             name: "SigstoreMLDSATests",
             dependencies: ["SigstoreMLDSA"],
-            resources: [.copy("Vectors")]
+            exclude: ["Vectors"]
         ),
         .testTarget(
             name: "SigstoreTests",
@@ -167,7 +167,7 @@ let package = Package(
                 .product(name: "SwiftASN1", package: "swift-asn1"),
                 .product(name: "X509", package: "swift-certificates"),
             ],
-            resources: [.copy("Fixtures")]
+            exclude: ["Fixtures"]
         ),
     ]
 )

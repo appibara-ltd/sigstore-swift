@@ -12,8 +12,7 @@ struct MLDSAIntegrationTests {
     private struct Vectors: Decodable { let keys: [KeyCase]; let checkpoint: CheckpointCase }
 
     private func vectors() throws -> Vectors {
-        let url = try #require(Foundation.Bundle.module.url(forResource: "mldsa", withExtension: "json", subdirectory: "Fixtures"))
-        return try JSONDecoder().decode(Vectors.self, from: Data(contentsOf: url))
+        try JSONDecoder().decode(Vectors.self, from: Fixtures.file("mldsa.json"))
     }
 
     private func b64(_ s: String) throws -> Data { try #require(Data(base64Encoded: s)) }
