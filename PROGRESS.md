@@ -2,7 +2,10 @@
 
 Continuity log. Update at the end of every session.
 
-## Status (2026-11-27, session 1, part 11)
+## Status (2026-11-27, session 1, part 12)
+
+Since 0.2.0 (unreleased): `SigningConfig` (`pkg/root`) ported; `swift
+test`: 188 tests.
 
 **Verify-side parity with sigstore-go v1.4.1 is released as 0.2.0
 (922063b).** CI run 45795632671 on that commit is green on all five jobs:
@@ -162,17 +165,35 @@ and a policy of artifact digest + OIDC issuer
   cert/key with its default algorithm + digest, or the PAE digest for DSSE)
   under the checkpoint root. Rekor v2 entries give no integrated timestamp;
   a TSA timestamp is required.
+- `SigningConfig` (`Sources/SigstoreRoot/SigningConfig.swift`, port of
+  sigstore-go v1.4.1 `pkg/root/signing_config.go`): v0.2 media type,
+  strict protojson parsing (unknown fields, duplicate keys, unknown enum
+  names rejected), `Service` / `ServiceConfiguration`, `selectService`
+  (newest service of the highest supported API version valid at a time)
+  and `selectServices` (`ALL` / `ANY` / `EXACT`, one service per operator,
+  only the highest API version with a match), builders, `marshalJSON()`
+  (equal to Go's `protojson.Marshal` output in Go's test), and
+  `fetchSigningConfig()` / `fetchSigningConfigWithOptions(_:)` /
+  `getSigningConfig(_:)` over TUF (`signing_config.v0.2.json`). Tests port
+  Go's `signing_config_test.go` cases. Fetched live from
+  `tuf-repo-cdn.sigstore.dev` on 2026-11-27 (Fulcio, OAuth2, Rekor v1 and
+  the TSA, all `ANY`). Not used by verification; it prepares signing.
 
 ### Stubbed / not implemented
 
 - ML-DSA inside X.509 certificates (Fulcio leaves, TSA chains):
-  swift-certificates cannot parse ML-DSA keys or signatures. ML-DSA is
-  supported for raw keys only (managed keys, log keys).
-- RFC 3161: BER-encoded tokens, `subjectKeyIdentifier` signer IDs (also
-  unsupported by Go's pkcs7), revocation (not checked by Go either).
-- `SigningConfig` (signing-side; parse-only in sigstore-go `pkg/root`),
-  go-tuf `multirepo`. The v2 verifiers are not implemented in sigstore-go
-  v1.4.1 either.
+  swift-certificates 1.21.2 (latest) cannot parse ML-DSA keys or
+  signatures, so such a certificate fails to parse. ML-DSA is supported for
+  raw keys only (managed keys, log keys). Plan: add ML-DSA to
+  swift-certificates upstream (see Decisions); not started.
+- RFC 3161 BER-encoded tokens: Go's pkcs7 converts BER to DER
+  (`ber2der`) before parsing; we accept DER only, so a BER token Go
+  accepts is rejected here (fail-closed).
+- RFC 3161 `subjectKeyIdentifier` signer IDs are intentionally unsupported
+  and revocation is not checked; Go's pkcs7 / sigstore-go do neither (see
+  Decisions).
+- The v2 verifiers (`IdentityVerifier`, `PKIVerifier`, `KeyVerifier`)
+  throw "not implemented", as in sigstore-go v1.4.1.
 
 ### Fixtures
 
@@ -212,6 +233,10 @@ hash-prefixed `trusted_root.json`. Tests pin the reference time to
 2026-11-26. Negative TUF tests use a synthetic signed repository
 (`TestTUFRepo` in `TUFTests.swift`).
 
+`Tests/SigstoreTests/Fixtures/signing_config.v0.2.json` is sigstore-go
+v1.4.1 `examples/signing_config.v0.2.json` (Apache-2.0), sha256
+`9711a6d5…539c`.
+
 `Tests/SigstoreTests/Fixtures/trusted_root.json` is `sigstore/root-signing`
 `targets/trusted_root.json` @ main, sha256 `6494e21e…0b66`, fetched
 2026-11-25 (test fixture only; the package embeds no trusted root).
@@ -219,7 +244,8 @@ hash-prefixed `trusted_root.json`. Tests pin the reference time to
 ## Next steps
 
 Done: 0.2.0 tagged and released; appitool `self-update` integration
-(embedded GitHub TUF root, sigstore-swift first, `gh` cross-check).
+(embedded GitHub TUF root, sigstore-swift first, `gh` cross-check);
+`SigningConfig` (`pkg/root`), unreleased.
 
 1. **Hardening before announcing.** Watch the weekly fuzz runs (Mondays
    03:00 UTC, 15 min per target). Then a security review, with a human
@@ -229,11 +255,16 @@ Done: 0.2.0 tagged and released; appitool `self-update` integration
    `scorecard.yml` (OpenSSF Scorecard), `codeql.yml` and `depsreview.yml`:
    add Scorecard, a SAST job, dependency review, `SECURITY.md`,
    Dependabot, and pin actions by SHA.
-3. **Remaining verify gaps** (see "Stubbed / not implemented"): ML-DSA in
-   X.509 certificates (blocked on swift-certificates), RFC 3161 BER tokens
-   and `subjectKeyIdentifier` signers (unsupported in Go too),
-   `SigningConfig` parsing (`pkg/root`), go-tuf `multirepo`.
-4. **Signing** (sigstore-go `pkg/sign`): ephemeral keys, OIDC token
+3. **RFC 3161 BER tokens**: port pkcs7's `ber2der` (digitorus/pkcs7
+   `ber.go` at sigstore-go's pin) in front of the DER parser, with its
+   negative tests. TSAs in practice emit DER; this closes the last
+   Go-accepts/we-reject case.
+4. **ML-DSA in X.509 certificates**: add
+   ML-DSA public keys and signatures to swift-certificates upstream, then
+   bump the dependency (user decision, 2026-11-27: this route, but not
+   yet). First check which ML-DSA parameter sets swift-crypto's `Crypto`
+   API exposes (it ships BoringSSL `mldsa.cc`); sigstore needs ML-DSA-44.
+5. **Signing** (sigstore-go `pkg/sign`): ephemeral keys, OIDC token
    handling, Fulcio certificate requests, Rekor v1/v2 uploads, TSA
    requests, bundle building. Then enable sigstore-conformance's sign
    tests.
@@ -358,6 +389,24 @@ Done: 0.2.0 tagged and released; appitool `self-update` integration
   leaf hash of real logged bodies.
 - Conformance xfail list is read with `sed '/^#/d'` (an all-comment file
   made `grep -v` exit 1 under `set -e`).
+- `SigningConfig` is a value type: the `with…` / `add…` builders return a
+  modified copy (Go mutates the receiver and returns it). Infallible Go
+  getters are properties (`rekorLogURLs`, `rekorLogURLsConfig`, …). An
+  unset `rekorTlogConfig` / `tsaConfig` reads as an empty configuration
+  (Go dereferences nil and panics). `Service` validity bounds are `Date?`
+  (`nil` for Go's zero time); `toServiceProtobuf()` writes Go's zero time
+  (`0001-01-01T00:00:00Z`) for an unset start, as Go does. Ties in the
+  newest-first ordering keep Go's order for slices under 13 elements
+  (pdqsort's stable insertion sort); above that Go's order is unspecified.
+  `selectServices` takes an optional `RandomNumberGenerator` for the
+  `ANY` / `EXACT` choice (Go: `math/rand`).
+- go-tuf `multirepo` is not ported: sigstore-go does not use it (`pkg/tuf`
+  uses the single-repository updater only).
+- RFC 3161 `subjectKeyIdentifier` signer IDs are not supported, as in Go's
+  pkcs7 (issuer-and-serial only).
+- ML-DSA in X.509 certificates will be added to swift-certificates
+  upstream (Option A, user decision 2026-11-27), not by parsing
+  certificates ourselves; deferred.
 
 ## Spec questions
 

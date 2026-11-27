@@ -35,6 +35,33 @@ public func getTrustedRoot(_ client: Client) async throws -> TrustedRoot {
     return try TrustedRoot(json: json)
 }
 
+/// Mirrors `root.FetchSigningConfig`: the public-good signing config via TUF.
+public func fetchSigningConfig() async throws -> SigningConfig {
+    try await fetchSigningConfigWithOptions(SigstoreTUF.Options())
+}
+
+/// Mirrors `root.FetchSigningConfigWithOptions`.
+public func fetchSigningConfigWithOptions(_ opts: SigstoreTUF.Options) async throws -> SigningConfig {
+    let client: Client
+    do {
+        client = try await Client(options: opts)
+    } catch {
+        throw SigstoreError("failed to create TUF client", underlying: error)
+    }
+    return try await getSigningConfig(client)
+}
+
+/// Mirrors `root.GetSigningConfig`.
+public func getSigningConfig(_ client: Client) async throws -> SigningConfig {
+    let json: Data
+    do {
+        json = try await client.getTarget(defaultSigningConfigTarget)
+    } catch {
+        throw SigstoreError("failed to get signing config from TUF client", underlying: error)
+    }
+    return try SigningConfig(json: json)
+}
+
 /// Mirrors `root.LiveTrustedRoot`: a trusted root fetched over TUF and
 /// refreshed in the background every `refreshPeriod` (default 24 h). Reads
 /// always see a complete trusted root; a failed refresh keeps the previous
