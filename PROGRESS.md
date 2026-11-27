@@ -2,13 +2,30 @@
 
 Continuity log. Update at the end of every session.
 
-## Status (2026-11-26, session 1, part 10)
+## Status (2026-11-27, session 1, part 11)
 
-**Verify-side parity with sigstore-go v1.4.1 is on `main` (9d4186e).** CI
-run 45787953354 is green on all five jobs: macOS, Linux, Windows,
-conformance and the first full fuzz run (30 s per target, ~1.8M inputs in
-total, no crash, hang or invariant failure). `swift test`: 174 tests;
-conformance 135/135 (pin) and 141/141 (suite main).
+**Verify-side parity with sigstore-go v1.4.1 is released as 0.2.0
+(922063b).** CI run 45795632671 on that commit is green on all five jobs:
+macOS, Linux, Windows, conformance and fuzz (30 s per target, ~1.8M
+inputs in total, no crash, hang or invariant failure). `swift test`: 174
+tests; conformance 135/135 (pin) and 141/141 (suite main).
+
+**First consumer: appitool** (appibara-ltd/appitool, depends on
+`.upToNextMinor(from: "0.2.0")`, macOS 26):
+
+- `self-update` (appitool 850eb19) verifies the release archive's SLSA
+  provenance with sigstore-swift on every update: bundles from the
+  public attestations API, trusted roots over TUF (public-good, or
+  GitHub's instance from `tuf-repo.github.com` with `gh`'s root v3
+  embedded), the `gh attestation verify` verifier options per instance,
+  and a release-workflow certificate identity. When `gh` is installed,
+  `gh attestation verify` must agree; a disagreement aborts the update.
+- `appitool verify -f <file>` (released in appitool v0.11.6) runs the
+  same sigstore-swift checks without `gh`, with
+  `--bundle`, `--repo`, `--signer-workflow` and `--predicate-type`
+  (defaults: appitool's release attestations).
+- appitool's 558-test suite passes with the 0.2.0 dependency, including
+  tests against the real v0.11.0 bundles and both trusted roots.
 
 Fuzz, first run (inputs in 30 s): json 65k, protojson 82k, bundle 28k,
 trustedroot 28k, statement 228k, rfc3161 277k, note 182k, tuf 22k,
@@ -201,14 +218,25 @@ hash-prefixed `trusted_root.json`. Tests pin the reference time to
 
 ## Next steps
 
-1. Watch the weekly 15-min-per-target fuzz runs; then a security review
-   before announcing (focus: the hand-written primitives — ML-DSA,
-   Ed25519ph, RSA — and parsers).
-3. **appitool**: embed `gh`'s GitHub TUF root and fetch GitHub's trusted
-   root with `Options().withRoot(...).withRepositoryBaseURL(
-   "https://tuf-repo.github.com")`, as `gh` does; replace `gh attestation
-   verify --bundle` in `self-update`.
-4. Tag 0.2.0 once CI and fuzzing are green.
+Done: 0.2.0 tagged and released; appitool `self-update` integration
+(embedded GitHub TUF root, sigstore-swift first, `gh` cross-check).
+
+1. **Hardening before announcing.** Watch the weekly fuzz runs (Mondays
+   03:00 UTC, 15 min per target). Then a security review, with a human
+   review of the hand-written cryptography (ML-DSA, Ed25519ph, RSA) and
+   the parsers (protojson, DER/CMS, signed notes, TUF metadata).
+2. **Repository hygiene as in sigstore-go**, whose workflows include
+   `scorecard.yml` (OpenSSF Scorecard), `codeql.yml` and `depsreview.yml`:
+   add Scorecard, a SAST job, dependency review, `SECURITY.md`,
+   Dependabot, and pin actions by SHA.
+3. **Remaining verify gaps** (see "Stubbed / not implemented"): ML-DSA in
+   X.509 certificates (blocked on swift-certificates), RFC 3161 BER tokens
+   and `subjectKeyIdentifier` signers (unsupported in Go too),
+   `SigningConfig` parsing (`pkg/root`), go-tuf `multirepo`.
+4. **Signing** (sigstore-go `pkg/sign`): ephemeral keys, OIDC token
+   handling, Fulcio certificate requests, Rekor v1/v2 uploads, TSA
+   requests, bundle building. Then enable sigstore-conformance's sign
+   tests.
 
 ## Decisions
 
