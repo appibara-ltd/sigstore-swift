@@ -8,8 +8,8 @@
 // - github.com/digitorus/pkcs7 05f79448fa77 (`Parse`, `Verify`,
 //   `GetOnlySigner`), as `PKCS7SignedData`.
 //
-// Deviations (see PROGRESS.md → Decisions): DER only (pkcs7 converts BER to
-// DER first), signerInfo `sid` must be issuerAndSerialNumber (as in pkcs7),
+// Deviations (see PROGRESS.md → Decisions): signerInfo `sid` must be
+// issuerAndSerialNumber (as in pkcs7),
 // SHA-1 is rejected outright, and ML-DSA keys are unsupported.
 
 import Crypto
@@ -82,33 +82,43 @@ public struct RFC3161Timestamp: Sendable {
 
     /// Mirrors `timestamp.ParseResponse`: `bytes` is a DER TimeStampResp
     /// (RFC 3161 §2.4.2), as carried in a bundle's `signedTimestamp`.
+    ///
+    /// As in Go (`asn1.Unmarshal` into a struct with a `RawValue` token), the
+    /// response and its status are DER, while the TimeStampToken is taken as
+    /// a raw TLV without decoding its contents; `parse(token:)` then accepts
+    /// BER there (pkcs7 `ber2der`). Stricter than Go: elements after the
+    /// token are rejected (Go ignores them).
     public static func parseResponse(_ bytes: [UInt8]) throws -> RFC3161Timestamp {
-        let root = try asn1 { try DER.parse(bytes) }  // rejects trailing data
-        let token: ASN1Node = try asn1 {
-            try DER.sequence(root, identifier: .sequence) { nodes in
-                guard let statusNode = nodes.next() else { throw ASN1Error.invalidASN1Object(reason: "missing status") }
-                let (status, statusStrings) = try DER.sequence(statusNode, identifier: .sequence) { s in
-                    let status = try Int(derEncoded: &s)
-                    var strings: [String] = []
-                    if let free = optionalNode(&s, .sequence) {
-                        strings = try DER.sequence(of: ASN1UTF8String.self, identifier: .sequence, rootNode: free)
-                            .map(String.init)
-                    }
-                    _ = optionalNode(&s, .bitString)  // failInfo
-                    return (status, strings)
+        let (response, trailing) = try DERHeader.read(bytes[...])
+        guard trailing.isEmpty else { throw SigstoreError("trailing data in Time-Stamp response") }
+        guard response.identifier.elementsEqual([0x30]) else {
+            throw SigstoreError("asn1: structure error: Time-Stamp response is not a SEQUENCE")
+        }
+        let (statusTLV, afterStatus) = try DERHeader.read(response.content)
+        let statusNode = try asn1 { try DER.parse(statusTLV.full) }
+        let (status, statusStrings) = try asn1 {
+            try DER.sequence(statusNode, identifier: .sequence) { s in
+                let status = try Int(derEncoded: &s)
+                var strings: [String] = []
+                if let free = optionalNode(&s, .sequence) {
+                    strings = try DER.sequence(of: ASN1UTF8String.self, identifier: .sequence, rootNode: free)
+                        .map(String.init)
                 }
-                // digitorus rejects grantedWithMods (1) too.
-                if status > 0 {
-                    throw SigstoreError(
-                        "timestamp response status \(status): \(statusStrings.joined(separator: ","))")
-                }
-                guard let token = nodes.next() else {
-                    throw SigstoreError("no pkcs7 data in Time-Stamp response")
-                }
-                return token
+                _ = optionalNode(&s, .bitString)  // failInfo
+                return (status, strings)
             }
         }
-        return try parse(token: Array(token.encodedBytes))
+        // digitorus rejects grantedWithMods (1) too.
+        if status > 0 {
+            throw SigstoreError("timestamp response status \(status): \(statusStrings.joined(separator: ","))")
+        }
+        guard !afterStatus.isEmpty else { throw SigstoreError("no pkcs7 data in Time-Stamp response") }
+        let (token, afterToken) = try DERHeader.read(afterStatus)
+        guard !token.content.isEmpty else { throw SigstoreError("no pkcs7 data in Time-Stamp response") }
+        guard afterToken.isEmpty else {
+            throw SigstoreError("asn1: structure error: unexpected data after the TimeStampToken")
+        }
+        return try parse(token: Array(token.full))
     }
 
     /// Mirrors `timestamp.Parse`: parses a TimeStampToken (CMS ContentInfo).
@@ -318,10 +328,12 @@ struct PKCS7SignedData {
     var certificates: [Certificate]
     var signers: [CMSSignerInfo]
 
-    /// Mirrors `pkcs7.Parse` (SignedData only).
+    /// Mirrors `pkcs7.Parse` (SignedData only): BER input is transcoded to
+    /// DER first (`ber2der`), then parsed as DER.
     static func parse(_ bytes: [UInt8]) throws -> PKCS7SignedData {
         guard !bytes.isEmpty else { throw SigstoreError("pkcs7: input data is empty") }
-        let root = try asn1 { try DER.parse(bytes) }
+        let der = try ber2der(bytes)
+        let root = try asn1 { try DER.parse(der) }
         return try asn1 {
             try DER.sequence(root, identifier: .sequence) { n in
                 let contentType = try ASN1ObjectIdentifier(derEncoded: &n)

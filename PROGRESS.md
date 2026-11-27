@@ -2,10 +2,11 @@
 
 Continuity log. Update at the end of every session.
 
-## Status (2026-11-27, session 1, part 12)
+## Status (2026-11-27, session 1, part 13)
 
-Since 0.2.0 (unreleased): `SigningConfig` (`pkg/root`) ported; `swift
-test`: 188 tests.
+Since 0.2.0 (unreleased): `SigningConfig` (`pkg/root`) ported; BER
+TimeStampTokens accepted (pkcs7 `ber2der`); test data embedded instead of
+resource bundles (no target has one now). `swift test`: 200 tests.
 
 **Verify-side parity with sigstore-go v1.4.1 is released as 0.2.0
 (922063b).** CI run 45795632671 on that commit is green on all five jobs:
@@ -150,6 +151,12 @@ and a policy of artifact digest + OIDC issuer
   the embedded signer), SHA-256/384/512 imprint = hash of the signature
   bytes, PQC policy OID rejected for non-ML-DSA chains, TSA `validFor`
   (inclusive), duplicate-TSA and token-count limits.
+- BER TimeStampTokens: the token is transcoded with a port of pkcs7
+  `ber2der` before parsing, as in Go; tests port pkcs7's `ber_test.go` and
+  check that the conformance and synthetic tokens re-encoded as BER
+  (indefinite lengths, long-form lengths) verify like their DER originals,
+  that a tampered BER token fails, and that the response around the token
+  must stay DER.
 - GitHub release attestations (`release.sigstore.json`) verify against
   GitHub's trusted root with `.withSignedTimestamps(threshold: 1)`.
 - Rekor v2 entries (port of sigstore-go `pkg/verify/tlog.go` +
@@ -186,9 +193,6 @@ and a policy of artifact digest + OIDC issuer
   signatures, so such a certificate fails to parse. ML-DSA is supported for
   raw keys only (managed keys, log keys). Plan: add ML-DSA to
   swift-certificates upstream (see Decisions); not started.
-- RFC 3161 BER-encoded tokens: Go's pkcs7 converts BER to DER
-  (`ber2der`) before parsing; we accept DER only, so a BER token Go
-  accepts is rejected here (fail-closed).
 - RFC 3161 `subjectKeyIdentifier` signer IDs are intentionally unsupported
   and revocation is not checked; Go's pkcs7 / sigstore-go do neither (see
   Decisions).
@@ -245,7 +249,8 @@ v1.4.1 `examples/signing_config.v0.2.json` (Apache-2.0), sha256
 
 Done: 0.2.0 tagged and released; appitool `self-update` integration
 (embedded GitHub TUF root, sigstore-swift first, `gh` cross-check);
-`SigningConfig` (`pkg/root`), unreleased.
+`SigningConfig` (`pkg/root`), BER TimeStampTokens and embedded test data,
+unreleased.
 
 1. **Hardening before announcing.** Watch the weekly fuzz runs (Mondays
    03:00 UTC, 15 min per target). Then a security review, with a human
@@ -255,16 +260,12 @@ Done: 0.2.0 tagged and released; appitool `self-update` integration
    `scorecard.yml` (OpenSSF Scorecard), `codeql.yml` and `depsreview.yml`:
    add Scorecard, a SAST job, dependency review, `SECURITY.md`,
    Dependabot, and pin actions by SHA.
-3. **RFC 3161 BER tokens**: port pkcs7's `ber2der` (digitorus/pkcs7
-   `ber.go` at sigstore-go's pin) in front of the DER parser, with its
-   negative tests. TSAs in practice emit DER; this closes the last
-   Go-accepts/we-reject case.
-4. **ML-DSA in X.509 certificates**: add
+3. **ML-DSA in X.509 certificates**, the only remaining verify gap: add
    ML-DSA public keys and signatures to swift-certificates upstream, then
    bump the dependency (user decision, 2026-11-27: this route, but not
    yet). First check which ML-DSA parameter sets swift-crypto's `Crypto`
    API exposes (it ships BoringSSL `mldsa.cc`); sigstore needs ML-DSA-44.
-5. **Signing** (sigstore-go `pkg/sign`): ephemeral keys, OIDC token
+4. **Signing** (sigstore-go `pkg/sign`): ephemeral keys, OIDC token
    handling, Fulcio certificate requests, Rekor v1/v2 uploads, TSA
    requests, bundle building. Then enable sigstore-conformance's sign
    tests.
@@ -373,11 +374,29 @@ Done: 0.2.0 tagged and released; appitool `self-update` integration
 - Rekor v1 `intoto` 0.0.2 signatures decode leniently like Go (bad inner
   base64 → empty signature → "signature does not match"), not at parse time.
 - RFC 3161 parsing is a hand-written SwiftASN1 walk (swift-certificates' CMS
-  types are internal). Deviations from Go: DER only (pkcs7 runs `ber2der`
-  first); SHA-1 digests/signatures rejected at parse rather than by x509;
-  signed attributes are verified over their received encoding re-tagged as
-  SET (Go re-marshals and sorts; identical for DER input); chain validation
-  returns one chain (swift-certificates) instead of all.
+  types are internal). Deviations from Go: SHA-1 digests/signatures
+  rejected at parse rather than by x509; signed attributes are verified
+  over their (transcoded) encoding re-tagged as SET (Go re-marshals and
+  sorts; identical when the token's signed attributes are already in DER
+  order, so an unsorted BER SET that Go accepts is rejected here);
+  chain validation returns one chain (swift-certificates) instead of all.
+- BER TimeStampTokens (`Sources/SigstoreRoot/BER.swift`): `ber2der` is a
+  port of digitorus/pkcs7 05f79448fa77 `ber.go`, run on the token in
+  `PKCS7SignedData.parse` as `pkcs7.Parse` does, including its quirks (an
+  empty indefinite-length value is rejected; a leading-zero length is
+  accepted when the next byte is ≥ 0x80; bytes after the first object are
+  ignored). Our addition: nesting deeper than 50 is rejected (SwiftASN1's
+  limit for the DER that follows; Go recurses without a limit). The
+  TimeStampResp around the token is read like Go's encoding/asn1 (DER
+  headers, token kept as a raw TLV, `DERHeader`) instead of being fully
+  DER-parsed, so a BER token inside a DER response is reachable. Stricter
+  than Go, as before: elements after the token are rejected.
+- Test data is embedded like the TUF roots: `scripts/embed-test-data.sh`
+  writes `Tests/<target>/EmbeddedTestData.swift` (one base64 literal per
+  file, with its sha256) from `Tests/SigstoreTests/Fixtures` and the
+  `Vectors` directories, which `Package.swift` excludes from the targets.
+  The CI `generated` job reruns both embed scripts and fails on a diff
+  (sigstore-go: `check-embedded-root.yml`).
 - `TimestampingAuthority.verify` and `verifySignedTimestamp*` are `async`
   (swift-certificates' path validator is async).
 - rekor-tiles v2.4.2 `rekor/v2/*.proto` (sigstore-go's pin) are generated
@@ -436,8 +455,9 @@ Done: 0.2.0 tagged and released; appitool `self-update` integration
   TUF spec uses the hex digest. Mirrored; worth raising upstream.
 - swift-build on Windows intermittently fails to "touch" a SwiftPM
   resource bundle directory (`copy /b <dir> +,,`): seen for the conformance
-  client and for SigstoreTUF. Library targets therefore have no resource
-  bundles; only the test target does. Worth reporting to swift-build.
+  client, SigstoreTUF and, on 2026-11-27 (run 46034322298), the
+  SigstoreCryptoExtrasTests test bundle. No target has resource bundles
+  any more (test data is embedded too). Worth reporting to swift-build.
 - `CodeSigningPolicy` (Fulcio) skips the root's EKU, but Go's
   `checkChainForKeyUsage` checks every certificate including the root
   (`TimestampingPolicy` does). Harmless for current Fulcio roots (no EKU);
