@@ -223,7 +223,8 @@ struct CMSSignerInfo {
     var serialNumber: ArraySlice<UInt8>
     var digestAlgorithm: AlgorithmIdentifierNode
     var authenticatedAttributes: [CMSAttributeNode]
-    /// The signed attributes re-tagged as SET OF (RFC 5652 §5.4).
+    /// The signed attributes as the DER SET OF the signature covers
+    /// (RFC 5652 §5.4), built as pkcs7 `marshalAttributes` does.
     var authenticatedAttributesDER: [UInt8]
     var digestEncryptionAlgorithm: AlgorithmIdentifierNode
     var encryptedDigest: [UInt8]
@@ -255,9 +256,7 @@ struct CMSSignerInfo {
                             return CMSAttributeNode(type: type, values: Array(values))
                         })
                 }
-                // [0] IMPLICIT (0xA0) → SET OF (0x31); the length is unchanged.
-                attributesDER = Array(signed.encodedBytes)
-                attributesDER[0] = 0x31
+                attributesDER = derSetOf(children.map { Array($0.encodedBytes) })
             }
             let digestEncryptionAlgorithm = try AlgorithmIdentifierNode(&n)
             let encryptedDigest = try ASN1OctetString(derEncoded: &n).bytes
@@ -712,6 +711,30 @@ private func asn1<T>(_ body: () throws -> T) throws -> T {
 
 /// The content bytes of a DER INTEGER of any sign (Go's `big.Int`
 /// decoding), rejecting non-minimal encodings as encoding/asn1 does.
+/// Mirrors pkcs7 `marshalAttributes`, which re-marshals the parsed signed
+/// attributes with Go's `asn1.Marshal` (`asn1:"set"`): a SET OF whose
+/// elements are sorted by their encodings with `bytes.Compare` (Go's
+/// `setEncoder`, X.690 §11.6). Each element is an attribute's TLV; Go
+/// re-encodes the attribute from its parsed OID (canonical, so the same
+/// bytes) and its value's raw bytes, so the TLV is what Go writes.
+func derSetOf(_ elements: [[UInt8]]) -> [UInt8] {
+    let body = elements.sorted { $0.lexicographicallyPrecedes($1) }.flatMap { $0 }
+    var out: [UInt8] = [0x31]
+    if body.count < 0x80 {
+        out.append(UInt8(body.count))
+    } else {
+        var lengthBytes: [UInt8] = []
+        var n = body.count
+        while n > 0 {
+            lengthBytes.insert(UInt8(truncatingIfNeeded: n), at: 0)
+            n >>= 8
+        }
+        out.append(0x80 | UInt8(lengthBytes.count))
+        out += lengthBytes
+    }
+    return out + body
+}
+
 func rawInteger(_ node: ASN1Node) throws -> ArraySlice<UInt8> {
     guard node.identifier == .integer, case .primitive(let bytes) = node.content else {
         throw ASN1Error.unexpectedFieldType(node.identifier)

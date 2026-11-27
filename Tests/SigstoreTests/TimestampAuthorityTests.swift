@@ -285,6 +285,27 @@ struct TimestampAuthorityTests {
         }
     }
 
+    /// pkcs7 verifies the signature over the signed attributes re-marshalled
+    /// as a DER SET OF (sorted), whatever order they were sent in.
+    @Test func unsortedSignedAttributesVerifyOverTheSortedSet() async throws {
+        let tsa = try TestTSA()
+        var o = TestTSA.TokenOptions()
+        o.attributeOrder = .reversedSignedSorted
+        let result = try await tsa.authority().verify(
+            signedTimestamp: tsa.response(for: artifact, o), signature: Data(artifact))
+        #expect(result.time == TestTSA.defaultTime)
+    }
+
+    @Test func signatureOverUnsortedSignedAttributesFails() async throws {
+        let tsa = try TestTSA()
+        var o = TestTSA.TokenOptions()
+        o.attributeOrder = .reversedSignedAsSent
+        await expectError("pkcs7: signature verification failed") {
+            _ = try await tsa.authority().verify(
+                signedTimestamp: tsa.response(for: self.artifact, o), signature: Data(self.artifact))
+        }
+    }
+
     @Test func trailingDataFails() async throws {
         let tsa = try TestTSA()
         let response = try tsa.response(for: artifact) + [0x00]
@@ -343,6 +364,19 @@ struct TestTSA {
         var status = 0
         var tamperSignature = false
         var wrongMessageDigest = false
+        var attributeOrder = AttributeOrder.sorted
+    }
+
+    /// How the signed attributes are sent and signed.
+    enum AttributeOrder {
+        /// DER order, signed as sent.
+        case sorted
+        /// Sent in reverse (non-DER) order, signed over the DER (sorted) SET,
+        /// as RFC 5652 requires; pkcs7 accepts this.
+        case reversedSignedSorted
+        /// Sent in reverse order and signed over the bytes as sent; pkcs7
+        /// re-sorts before verifying, so the signature does not match.
+        case reversedSignedAsSent
     }
 
     let rootKey = P256.Signing.PrivateKey()
@@ -449,23 +483,36 @@ struct TestTSA {
         // Signed attributes: contentType, messageDigest.
         var digest = Array(SHA256.hash(data: tstInfo))
         if o.wrongMessageDigest { digest[0] ^= 0xFF }
-        var a = DER.Serializer()
-        try a.appendConstructedNode(identifier: .set) { s in
-            try s.appendConstructedNode(identifier: .sequence) { s in
-                try s.serialize(([1, 2, 840, 113549, 1, 9, 3] as ASN1ObjectIdentifier))
-                try s.appendConstructedNode(identifier: .set) { s in
-                    try s.serialize(([1, 2, 840, 113549, 1, 9, 16, 1, 4] as ASN1ObjectIdentifier))
-                }
-            }
-            try s.appendConstructedNode(identifier: .sequence) { s in
-                try s.serialize(([1, 2, 840, 113549, 1, 9, 4] as ASN1ObjectIdentifier))
-                try s.appendConstructedNode(identifier: .set) { s in
-                    try s.serialize(ASN1OctetString(contentBytes: digest[...]))
-                }
+        // contentType sorts before messageDigest (shorter encoding).
+        var contentType = DER.Serializer()
+        try contentType.appendConstructedNode(identifier: .sequence) { s in
+            try s.serialize(([1, 2, 840, 113549, 1, 9, 3] as ASN1ObjectIdentifier))
+            try s.appendConstructedNode(identifier: .set) { s in
+                try s.serialize(([1, 2, 840, 113549, 1, 9, 16, 1, 4] as ASN1ObjectIdentifier))
             }
         }
-        let signedAttributes = a.serializedBytes
-        var implicitAttributes = signedAttributes
+        var messageDigest = DER.Serializer()
+        try messageDigest.appendConstructedNode(identifier: .sequence) { s in
+            try s.serialize(([1, 2, 840, 113549, 1, 9, 4] as ASN1ObjectIdentifier))
+            try s.appendConstructedNode(identifier: .set) { s in
+                try s.serialize(ASN1OctetString(contentBytes: digest[...]))
+            }
+        }
+        func set(_ elements: [[UInt8]]) throws -> [UInt8] {
+            var a = DER.Serializer()
+            try a.appendConstructedNode(identifier: .set) { s in
+                for e in elements { s.serializeRawBytes(e) }
+            }
+            return a.serializedBytes
+        }
+        let sorted = try set([contentType.serializedBytes, messageDigest.serializedBytes])
+        let reversed = try set([messageDigest.serializedBytes, contentType.serializedBytes])
+        let (sentAttributes, signedAttributes): ([UInt8], [UInt8]) = switch o.attributeOrder {
+        case .sorted: (sorted, sorted)
+        case .reversedSignedSorted: (reversed, sorted)
+        case .reversedSignedAsSent: (reversed, reversed)
+        }
+        var implicitAttributes = sentAttributes
         implicitAttributes[0] = 0xA0
         let signature = try leafKey.signature(
             for: o.tamperSignature ? signedAttributes + [0x00] : signedAttributes

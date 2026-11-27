@@ -2,11 +2,12 @@
 
 Continuity log. Update at the end of every session.
 
-## Status (2026-11-27, session 1, part 13)
+## Status (2026-11-27, session 1, part 14)
 
 Since 0.2.0 (unreleased): `SigningConfig` (`pkg/root`) ported; BER
 TimeStampTokens accepted (pkcs7 `ber2der`); test data embedded instead of
-resource bundles (no target has one now). `swift test`: 200 tests.
+resource bundles (no target has one now); signed attributes verified over
+the sorted DER SET as pkcs7 does. `swift test`: 202 tests.
 
 **Verify-side parity with sigstore-go v1.4.1 is released as 0.2.0
 (922063b).** CI run 45795632671 on that commit is green on all five jobs:
@@ -374,12 +375,13 @@ unreleased.
 - Rekor v1 `intoto` 0.0.2 signatures decode leniently like Go (bad inner
   base64 → empty signature → "signature does not match"), not at parse time.
 - RFC 3161 parsing is a hand-written SwiftASN1 walk (swift-certificates' CMS
-  types are internal). Deviations from Go: SHA-1 digests/signatures
-  rejected at parse rather than by x509; signed attributes are verified
-  over their (transcoded) encoding re-tagged as SET (Go re-marshals and
-  sorts; identical when the token's signed attributes are already in DER
-  order, so an unsorted BER SET that Go accepts is rejected here);
-  chain validation returns one chain (swift-certificates) instead of all.
+  types are internal). Signed attributes are verified over the DER SET OF
+  their encodings sorted bytewise, as pkcs7 `marshalAttributes` re-marshals
+  them (Go `asn1.Marshal` sorts `set` slices with `bytes.Compare`), so
+  attributes sent out of order verify when signed over the sorted set and
+  fail when signed as sent, as in Go. Deviations from Go: SHA-1
+  digests/signatures rejected at parse rather than by x509; chain
+  validation returns one chain (swift-certificates) instead of all.
 - BER TimeStampTokens (`Sources/SigstoreRoot/BER.swift`): `ber2der` is a
   port of digitorus/pkcs7 05f79448fa77 `ber.go`, run on the token in
   `PKCS7SignedData.parse` as `pkcs7.Parse` does, including its quirks (an
