@@ -197,7 +197,58 @@ and a policy of artifact digest + OIDC issuer
   swift-certificates 1.21.2 (latest) cannot parse ML-DSA keys or
   signatures, so such a certificate fails to parse. ML-DSA is supported for
   raw keys only (managed keys, log keys). Plan: add ML-DSA to
-  swift-certificates upstream (see Decisions); not started.
+  swift-certificates upstream (see Decisions and "ML-DSA in X.509:
+  upstream status" below); not started.
+
+### ML-DSA in X.509: what Sigstore uses (checked 2026-11-27)
+
+ML-DSA in Sigstore is experimental and for private deployments only:
+protobuf-specs `sigstore_common.proto` defines `ML_DSA_44` (23),
+`ML_DSA_65` (21) and `ML_DSA_87` (22) as pure ML-DSA (FIPS 204, RFC 9881)
+with a "USER WARNING: … experimental … MAY be used by private Sigstore
+deployments, but they are not yet fully functional". By component:
+
+- **sigstore-go v1.4.1**: `pkg/sign/mldsa.go` (`MLDSAKeypair`, added in
+  #697) generates ephemeral **ML-DSA-44** signing keys; `pkg/root`
+  accepts only ML-DSA-44 transparency-log keys. So a Fulcio leaf issued to
+  sigstore-go's signer carries an ML-DSA-44 public key.
+- **Fulcio** (`--experimental-enable-pqc`, added in #2522, 2026-11-10;
+  `docs/setup.md`): issues ML-DSA certificates only for private
+  deployments, with no CT log (so no SCTs). With the flag, the CA key and
+  chain must be ML-DSA (any of 44/65/87; the `ephemeralca` backend uses
+  **ML-DSA-65**), the chain must not mix ML-DSA and other keys, and client
+  keys default to `mldsa-44,mldsa-65,mldsa-87`.
+- **timestamp-authority**: ML-DSA signers of any parameter set (file
+  keys), `--timestamp-signer-hash=sha512` required, and the PQC policy
+  OID `1.3.6.1.4.1.57264.2.1` ties ML-DSA chains to that policy (we already
+  port that check).
+- **Public-good**: no ML-DSA anywhere in its trusted root (fixture
+  snapshot of 2026-11-25): Rekor keys ECDSA P-256 and Ed25519, CT log keys
+  ECDSA P-256, Fulcio and TSA chains ECDSA (ecdsa-with-SHA384).
+
+So verifying a Sigstore ML-DSA deployment needs **all three** parameter
+sets in certificates, and **ML-DSA-44** at least for leaf keys.
+
+### ML-DSA in X.509: upstream status (checked 2026-11-27)
+
+- **apple/swift-certificates #312** "Add ML-DSA-65 and ML-DSA-87
+  certificate parsing and verification" (opened 2026-08-11 by an outside
+  contributor; open, `CHANGES_REQUESTED`, last update 2026-10-16,
+  `semver/minor`): RFC 9881 parsing and verification of ML-DSA-65/87 keys
+  and signatures, chains through `Verifier` + `RFC5280Policy`. After review
+  (Lukasa, Joannis) ML-DSA subject keys sit behind a default-off `MLDSA`
+  package trait (needs swift-crypto ≥ 4.0.0; parsing certificates *signed*
+  with ML-DSA works without it). On Apple platforms ML-DSA comes from
+  CryptoKit (macOS/iOS 26 at runtime). A rebased head (all tests green)
+  waits on a fork branch while downstream SHA pins move. No ML-DSA-44.
+- **apple/swift-crypto #422** "Add ML-DSA-44 to CryptoExtras" (opened
+  2025-10-23; open, awaiting review; last activity 2026-08-17, a request
+  for maintainer interest without reply). swift-crypto has ML-DSA-65/87
+  only, which is why `SigstoreMLDSA` exists.
+- Consequence: #312 alone covers ML-DSA-65/87 CA and TSA chains but not
+  ML-DSA-44 leaves (sigstore-go's signer default); a certificate with an
+  ML-DSA-44 key would still fail to parse. ML-DSA-44 needs swift-crypto
+  #422 and then a follow-up to #312.
 - RFC 3161 `subjectKeyIdentifier` signer IDs are intentionally unsupported
   and revocation is not checked; Go's pkcs7 / sigstore-go do neither (see
   Decisions).
@@ -265,11 +316,13 @@ unreleased.
    `scorecard.yml` (OpenSSF Scorecard), `codeql.yml` and `depsreview.yml`:
    add Scorecard, a SAST job, dependency review, `SECURITY.md`,
    Dependabot, and pin actions by SHA.
-3. **ML-DSA in X.509 certificates**, the only remaining verify gap: add
-   ML-DSA public keys and signatures to swift-certificates upstream, then
-   bump the dependency (user decision, 2026-11-27: this route, but not
-   yet). First check which ML-DSA parameter sets swift-crypto's `Crypto`
-   API exposes (it ships BoringSSL `mldsa.cc`); sigstore needs ML-DSA-44.
+3. **ML-DSA in X.509 certificates**, the only remaining verify gap
+   (experimental, private deployments only; see "ML-DSA in X.509" above):
+   upstream route (user decision, 2026-11-27; not yet). Follow or help
+   swift-certificates #312 (ML-DSA-65/87), then enable its `MLDSA` trait
+   and bump the dependency; ML-DSA-44 (sigstore-go's leaf key) also needs
+   swift-crypto #422 and a swift-certificates follow-up. Re-check both PRs
+   before starting.
 4. **Signing** (sigstore-go `pkg/sign`): ephemeral keys, OIDC token
    handling, Fulcio certificate requests, Rekor v1/v2 uploads, TSA
    requests, bundle building. Then enable sigstore-conformance's sign
