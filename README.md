@@ -3,6 +3,8 @@
 [![CI](https://github.com/appibara-ltd/sigstore-swift/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/appibara-ltd/sigstore-swift/actions/workflows/ci.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/appibara-ltd/sigstore-swift/badge)](https://scorecard.dev/viewer/?uri=github.com/appibara-ltd/sigstore-swift)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/17219/badge)](https://www.bestpractices.dev/projects/17219)
+[![Swift versions](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fappibara-ltd%2Fsigstore-swift%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/appibara-ltd/sigstore-swift)
+[![Platforms](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fappibara-ltd%2Fsigstore-swift%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/appibara-ltd/sigstore-swift)
 
 A Swift library for verifying [Sigstore](https://www.sigstore.dev)
 signatures and attestations, such as GitHub artifact attestations. It checks
