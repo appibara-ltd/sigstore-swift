@@ -12,6 +12,7 @@ let package = Package(
         .library(name: "SigstoreTLog", targets: ["SigstoreTLog"]),
         .library(name: "SigstoreTUF", targets: ["SigstoreTUF"]),
         .library(name: "SigstoreVerify", targets: ["SigstoreVerify"]),
+        .library(name: "SigstoreSign", targets: ["SigstoreSign"]),
         .library(name: "SigstoreProtobufSpecs", targets: ["SigstoreProtobufSpecs"]),
         .library(name: "SigstoreFulcio", targets: ["SigstoreFulcio"]),
         .library(name: "SigstoreMLDSA", targets: ["SigstoreMLDSA"]),
@@ -125,6 +126,21 @@ let package = Package(
                 .product(name: "SwiftProtobuf", package: "swift-protobuf"),
             ]
         ),
+        // Mirrors sigstore-go pkg/sign.
+        .target(
+            name: "SigstoreSign",
+            dependencies: [
+                "SigstoreProtobufSpecs",
+                "SigstoreCommon",
+                "SigstoreBundle",
+                "SigstoreRoot",
+                "SigstoreVerify",
+                .product(name: "Crypto", package: "swift-crypto"),
+                .product(name: "_CryptoExtras", package: "swift-crypto"),
+                .product(name: "X509", package: "swift-certificates"),
+                .product(name: "SwiftASN1", package: "swift-asn1"),
+            ]
+        ),
         // Umbrella module.
         .target(
             name: "Sigstore",
@@ -139,6 +155,7 @@ let package = Package(
                 "SigstoreTLog",
                 "SigstoreTUF",
                 "SigstoreVerify",
+                "SigstoreSign",
             ]
         ),
         // sigstore-conformance client (verify only). Not a library product.

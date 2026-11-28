@@ -1,4 +1,4 @@
-// Umbrella module: `import Sigstore` re-exports the verification API.
+// Umbrella module: `import Sigstore` re-exports the verification and signing APIs.
 
 @_exported import SigstoreBundle
 @_exported import SigstoreCommon
@@ -10,3 +10,4 @@
 @_exported import SigstoreTLog
 @_exported import SigstoreTUF
 @_exported import SigstoreVerify
+@_exported import SigstoreSign
