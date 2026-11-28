@@ -1,0 +1,66 @@
+# Project Semgrep rules for the library sources, run in CI
+# (static-analysis.yml) together with semgrep/semgrep-rules' Swift rules.
+# Swift support in Semgrep is limited, so the rules use regexes.
+rules:
+  - id: swift-weak-hash
+    message: >-
+      MD5 and SHA-1 are broken for collision resistance. Use SHA-256 or
+      stronger; if a format requires SHA-1, explain why next to a
+      `nosemgrep` comment.
+    severity: ERROR
+    languages: [generic]
+    paths:
+      include: ["Sources/**/*.swift"]
+      exclude: ["Sources/SigstoreProtobufSpecs/Generated/**"]
+    pattern-regex: \bInsecure\.(MD5|SHA1)\b
+    metadata:
+      cwe: "CWE-328: Use of Weak Hash"
+
+  - id: swift-legacy-random
+    message: >-
+      C library random functions are not cryptographically secure. Use
+      SystemRandomNumberGenerator (the default for `.random(in:)`).
+    severity: ERROR
+    languages: [generic]
+    paths:
+      include: ["Sources/**/*.swift"]
+    pattern-regex: (?<![.\w])(arc4random|arc4random_uniform|drand48|erand48|lrand48|rand|random|srand|srandom)\s*\(
+    metadata:
+      cwe: "CWE-338: Use of Cryptographically Weak PRNG"
+
+  - id: swift-cleartext-http-url
+    message: >-
+      Plain HTTP has no integrity or confidentiality. Use https:// URLs.
+    severity: ERROR
+    languages: [generic]
+    paths:
+      include: ["Sources/**/*.swift"]
+    pattern-regex: URL\(\s*string:\s*"http://
+    metadata:
+      cwe: "CWE-319: Cleartext Transmission of Sensitive Information"
+
+  - id: swift-tls-trust-override
+    message: >-
+      Accepting a server trust object directly bypasses or replaces TLS
+      certificate validation. Leave validation to URLSession's default.
+    severity: ERROR
+    languages: [generic]
+    paths:
+      include: ["Sources/**/*.swift"]
+    pattern-regex: URLCredential\(\s*trust:|\.serverTrust\b
+    metadata:
+      cwe: "CWE-295: Improper Certificate Validation"
+
+  - id: swift-trap-in-library
+    message: >-
+      A trap in library code can be reached by untrusted input and crash the
+      host process. Throw an error instead; if the condition is impossible
+      (an embedded constant), say why next to a `nosemgrep` comment.
+    severity: WARNING
+    languages: [generic]
+    paths:
+      include: ["Sources/**/*.swift"]
+      exclude: ["Sources/SigstoreProtobufSpecs/Generated/**"]
+    pattern-regex: (?<![.\w])(fatalError|preconditionFailure|precondition)\s*\(
+    metadata:
+      cwe: "CWE-617: Reachable Assertion"

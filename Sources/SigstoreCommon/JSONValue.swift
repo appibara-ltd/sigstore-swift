@@ -43,8 +43,9 @@ public indirect enum JSONValue: Sendable, Equatable {
     public var arrayValue: [JSONValue]? { if case .array(let a) = self { return a } else { return nil } }
     /// The string if this is a string; otherwise `nil`.
     public var stringValue: String? { if case .string(let s) = self { return s } else { return nil } }
+    // nil means "not a boolean", like the other accessors.
     /// The boolean if this is a boolean; otherwise `nil`.
-    public var boolValue: Bool? { if case .bool(let b) = self { return b } else { return nil } }
+    public var boolValue: Bool? { if case .bool(let b) = self { return b } else { return nil } }  // swiftlint:disable:this discouraged_optional_boolean
 
     /// The value as an Int64 if it is a JSON number Go's `json.Number.Int64`
     /// accepts (decimal integer text within range).
@@ -69,6 +70,8 @@ public indirect enum JSONValue: Sendable, Equatable {
                 if i > 0 { out.append(UInt8(ascii: ",")) }
                 JSONValue.string(k).serialize(into: &out)
                 out.append(UInt8(ascii: ":"))
+                // k comes from o's own keys.
+                // swiftlint:disable:next force_unwrapping
                 o[k]!.serialize(into: &out)
             }
             out.append(UInt8(ascii: "}"))
@@ -135,6 +138,8 @@ public indirect enum JSONValue: Sendable, Equatable {
                 if i > 0 { out.append(UInt8(ascii: ",")) }
                 Self.encodeCanonicalString(k, into: &out)
                 out.append(UInt8(ascii: ":"))
+                // k comes from o's own keys.
+                // swiftlint:disable:next force_unwrapping
                 try o[k]!.encodeCanonical(into: &out)
             }
             out.append(UInt8(ascii: "}"))
@@ -252,6 +257,8 @@ struct JSONParser {
             }
             guard digits() > 0 else { throw error("invalid number") }
         }
+        // The number's bytes are ASCII (checked by the scanner).
+        // swiftlint:disable:next optional_data_string_conversion
         return String(decoding: bytes[start..<index], as: UTF8.self)
     }
 
@@ -303,6 +310,8 @@ struct JSONParser {
                         index += 2
                         let second = try hex4()
                         if (0xDC00..<0xE000).contains(second) {
+                            // A valid surrogate pair always combines to a valid scalar.
+                            // swiftlint:disable:next force_unwrapping
                             scalars.append(Unicode.Scalar(0x10000 + ((first - 0xD800) << 10) + (second - 0xDC00))!)
                             continue
                         }
@@ -312,6 +321,8 @@ struct JSONParser {
                 } else if (0xDC00..<0xE000).contains(first) {
                     scalars.append("\u{FFFD}")
                 } else {
+                    // first is at most 0xFFFF and not a surrogate: a valid scalar.
+                    // swiftlint:disable:next force_unwrapping
                     scalars.append(Unicode.Scalar(first)!)
                 }
             default:
@@ -321,6 +332,8 @@ struct JSONParser {
     }
 
     private mutating func hex4() throws -> UInt32 {
+        // Non-ASCII bytes become U+FFFD, which fails the hex parse.
+        // swiftlint:disable:next optional_data_string_conversion
         guard index + 4 <= bytes.count, let v = UInt32(String(decoding: bytes[index..<(index + 4)], as: UTF8.self), radix: 16)
         else { throw error("invalid \\u escape") }
         // UInt32(radix:) accepts a leading '+'; JSON does not.

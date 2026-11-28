@@ -157,6 +157,8 @@ public struct Extensions: Sendable, Hashable, Codable {
 public func parseExtensions(_ extensions: Certificate.Extensions) throws -> Extensions {
     var out = Extensions()
     for e in extensions {
+        // Go compares string(ext.Value); Go's regexp also reads invalid UTF-8 as U+FFFD.
+        // swiftlint:disable:next optional_data_string_conversion
         let raw = String(decoding: e.value, as: UTF8.self)
         switch e.oid {
         // BEGIN: Deprecated

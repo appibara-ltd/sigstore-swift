@@ -291,9 +291,14 @@ public struct Updater: Sendable {
         let path = try filePath ?? generateTargetFilePath(targetFile)
         var remotePath = targetFile.path
         if trusted.root.signed.consistentSnapshot && config.prefixTargetsWithHash {
-            // Go takes an arbitrary (map-order) hash; prefer sha256.
-            let alg = targetFile.hashes["sha256"] != nil ? "sha256" : targetFile.hashes.keys.sorted().first!
-            let prefix = Hex.encode(targetFile.hashes[alg]!)
+            // Go takes an arbitrary (map-order) hash; prefer sha256. Parsed
+            // targets always have one, but `hashes` is a public var: throw
+            // (as Go's VerifyLengthHashes later would) rather than trap.
+            let alg = targetFile.hashes["sha256"] != nil ? "sha256" : targetFile.hashes.keys.sorted().first
+            guard let alg, let digest = targetFile.hashes[alg] else {
+                throw TUFError.lengthOrHashMismatch("hashes must not be empty for target files")
+            }
+            let prefix = Hex.encode(digest)
             if let slash = remotePath.lastIndex(of: "/") {
                 remotePath = "\(remotePath[..<slash])/\(prefix).\(remotePath[remotePath.index(after: slash)...])"
             } else {

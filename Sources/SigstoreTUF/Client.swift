@@ -22,6 +22,8 @@ public func stagingRoot() -> Data { decodeEmbedded(EmbeddedRoots.stagingRoot) }
 private func decodeEmbedded(_ chunks: [String]) -> Data {
     guard let data = Data(base64Encoded: chunks.joined()) else {
         // As in Go: the binary is not assembled as it should be.
+        // The embedded root is generated at build time; as in Go, a corrupt one means a broken build.
+        // nosemgrep: swift-trap-in-library
         fatalError("embedded TUF root is corrupt")
     }
     return data

@@ -38,6 +38,11 @@ Other checks CI runs:
 - `scripts/fuzz.sh`: libFuzzer over the parsers (Linux).
 - Embedded data must match its sources: run `scripts/embed-tuf-roots.sh`
   and `scripts/embed-test-data.sh`, then check `git diff`.
+- Static analysis: `swiftlint lint --strict` (rules in `.swiftlint.yml`)
+  and `semgrep scan --config .semgrep/ --error Sources` (project rules; CI
+  adds semgrep-rules' Swift rules). A finding that is safe by construction
+  gets a `swiftlint:disable:next` or `nosemgrep` comment with the reason on
+  the line above.
 
 ## Rules for changes
 

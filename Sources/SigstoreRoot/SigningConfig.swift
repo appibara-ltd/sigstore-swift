@@ -161,6 +161,8 @@ public func selectService(
 public func selectServices(
     _ services: [Service], config: ServiceConfiguration, supportedAPIVersions: [UInt32], currentTime: Date
 ) throws -> [Service] {
+    // SystemRandomNumberGenerator is cryptographically secure; it only picks a service.
+    // nosemgrep: insecure-random
     var rng = SystemRandomNumberGenerator()
     return try selectServices(
         services, config: config, supportedAPIVersions: supportedAPIVersions, currentTime: currentTime, using: &rng
@@ -201,6 +203,8 @@ public func selectServices<G: RandomNumberGenerator>(
     case .all:
         return selected
     case .any:
+        // Selection randomness, not cryptography (the generator is SystemRandomNumberGenerator by default).
+        // nosemgrep: insecure-random
         return [selected[Int.random(in: 0..<selected.count, using: &generator)]]
     case .exact:
         return try selectExact(selected, count: config.count, using: &generator)
@@ -222,6 +226,8 @@ func selectExact<T, G: RandomNumberGenerator>(_ slice: [T], count: UInt32, using
     var remaining = slice
     var result: [T] = []
     for _ in 0..<count {
+        // Selection randomness, not cryptography (the generator is SystemRandomNumberGenerator by default).
+        // nosemgrep: insecure-random
         let i = Int.random(in: 0..<remaining.count, using: &generator)
         result.append(remaining[i])
         remaining.swapAt(i, remaining.count - 1)

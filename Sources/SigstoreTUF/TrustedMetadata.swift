@@ -79,6 +79,8 @@ public struct TrustedMetadata: Sendable {
     }
 
     private func checkFinalTimestamp() throws {
+        // Only called right after timestamp is set.
+        // swiftlint:disable:next force_unwrapping
         if timestamp!.signed.isExpired(refTime) { throw TUFError.expiredMetadata("timestamp.json is expired") }
     }
 
@@ -150,6 +152,8 @@ public struct TrustedMetadata: Sendable {
         if delegatorName == TUFRole.root {
             try root.verifyDelegate(roleName, newDelegate)
         } else {
+            // The guard at the top of this function ensures the delegator is loaded.
+            // swiftlint:disable:next force_unwrapping
             try targets[delegatorName]!.verifyDelegate(roleName, newDelegate)
         }
         if newDelegate.signed.version != meta.version {

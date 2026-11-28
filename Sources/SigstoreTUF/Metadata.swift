@@ -496,11 +496,12 @@ func isTargetInPathPattern(_ target: String, _ pattern: String) -> Bool {
     return zip(p, t).allSatisfy { goPathMatch(Array($0.utf8), Array($1.utf8)) == true }
 }
 
+// nil is Go's ErrBadPattern, distinct from no match.
 /// Port of Go's `path.Match` (go1.27 src/path/match.go): returns nil for a
 /// malformed pattern (`ErrBadPattern`). Byte-oriented like Go, decoding
 /// UTF-8 runes for `?` and character classes. Runs in polynomial time: only
 /// the last star backtracks.
-func goPathMatch(_ patternIn: [UInt8], _ nameIn: [UInt8]) -> Bool? {
+func goPathMatch(_ patternIn: [UInt8], _ nameIn: [UInt8]) -> Bool? {  // swiftlint:disable:this discouraged_optional_boolean
     var pattern = patternIn[...]
     var name = nameIn[...]
     let slash = UInt8(ascii: "/")

@@ -235,6 +235,21 @@ struct TUFTests {
         #expect(trustedRoot.fulcioCertificateAuthorities.count == fixture.fulcioCertificateAuthorities.count)
     }
 
+    /// A target whose hashes were emptied must fail, not trap, when the
+    /// download path is prefixed with a hash (consistent snapshots).
+    @Test func downloadTargetWithoutHashesThrows() async throws {
+        let (root, fetcher) = try githubFetcher()
+        var config = UpdaterConfig(remoteURL: TestTUFRepo.baseURL, rootBytes: root)
+        config.disableLocalCache = true
+        config.fetcher = fetcher
+        var updater = try Updater(config: config)
+        updater.unsafeSetRefTime(ISO8601DateFormatter().date(from: "2026-11-26T00:00:00Z")!)
+        var info = try await updater.getTargetInfo("trusted_root.json")
+        #expect(updater.trusted.root.signed.consistentSnapshot)
+        info.hashes = [:]
+        await expectTUFError("hashes must not be empty") { _ = try await updater.downloadTarget(info) }
+    }
+
     @Test func githubRepositoryExpiresAtLaterReferenceTime() async throws {
         let (root, fetcher) = try githubFetcher()
         var config = UpdaterConfig(remoteURL: TestTUFRepo.baseURL, rootBytes: root)

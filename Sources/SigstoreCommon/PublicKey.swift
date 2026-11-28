@@ -51,8 +51,12 @@ public enum SigstorePublicKey: Sendable, Hashable {
         switch self {
         case .x509(let k): return k.pkixBytes
         case .mlDSA(let k):
+            // mlDSAOIDs lists every MLDSAParameterSet case.
+            // swiftlint:disable:next force_unwrapping
             let oid = Self.mlDSAOIDs.first { $0.1 == k.parameterSet }!.0
             var s = DER.Serializer()
+            // Serializing fixed OIDs and a byte string cannot fail.
+            // swiftlint:disable:next force_try
             try! s.appendConstructedNode(identifier: .sequence) { s in
                 try s.appendConstructedNode(identifier: .sequence) { s in try s.serialize(oid) }
                 try s.serialize(ASN1BitString(bytes: ArraySlice(k.rawRepresentation)))

@@ -26,6 +26,8 @@ private func rotl(_ x: UInt64, _ n: UInt64) -> UInt64 {
 /// Keccak-f[1600] (FIPS 202 §3.3, Algorithm 7) on 25 lanes, lane (x, y) at
 /// index x + 5y. Unrolled over lanes so debug builds stay fast.
 private func keccakF1600(_ s: inout [UInt64]) {
+    // Internal invariant: the state always has 25 lanes.
+    // nosemgrep: swift-trap-in-library
     precondition(s.count == 25)
     var a0 = s[0], a1 = s[1], a2 = s[2], a3 = s[3], a4 = s[4]
     var a5 = s[5], a6 = s[6], a7 = s[7], a8 = s[8], a9 = s[9]
@@ -126,6 +128,8 @@ struct KeccakSponge {
     }
 
     mutating func absorb(_ bytes: UnsafeRawBufferPointer) {
+        // Internal invariant: no caller absorbs after squeezing.
+        // nosemgrep: swift-trap-in-library
         precondition(!squeezing, "absorb after squeeze")
         for b in bytes {
             xorByte(b, at: offset)

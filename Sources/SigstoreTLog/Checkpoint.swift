@@ -36,9 +36,12 @@ public struct SignedNote: Sendable {
         guard let last = sigBlock.last, last == 0x0A else {
             throw SigstoreError("malformed note")
         }
+        // Slices of text's UTF-8 cut at newlines: valid UTF-8.
+        // swiftlint:disable:next optional_data_string_conversion
         note = String(decoding: noteBytes, as: UTF8.self)
 
         var sigs: [NoteSignature] = []
+        // swiftlint:disable:next optional_data_string_conversion
         let lines = String(decoding: sigBlock, as: UTF8.self).split(separator: "\n", omittingEmptySubsequences: false)
         for line in lines.dropLast() {  // last element is empty (block ends with "\n")
             // Fscanf("\u{2014} %s %s\n")

@@ -15,6 +15,8 @@ struct EdwardsPoint: Sendable {
     static let base: EdwardsPoint = {
         var enc = [UInt8](repeating: 0x66, count: 32)
         enc[0] = 0x58
+        // The base point is a constant; decoding it cannot fail.
+        // nosemgrep: swift-trap-in-library
         guard let b = EdwardsPoint(encoded: enc) else { preconditionFailure("base point constant") }
         return b
     }()

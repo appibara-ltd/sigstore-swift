@@ -98,7 +98,7 @@ struct CodeSigningPolicy: VerifierPolicy {
                 return .failsToMeetPolicy(reason: "invalid extended key usage extension: \(error)")
             }
             // Go treats a missing or empty EKU extension as unrestricted.
-            guard let eku, eku.count > 0 else { continue }
+            guard let eku, !eku.isEmpty else { continue }
             if !(eku.contains(.codeSigning) || eku.contains(.any)) {
                 return .failsToMeetPolicy(
                     reason: "certificate at chain position \(index) does not permit code signing"

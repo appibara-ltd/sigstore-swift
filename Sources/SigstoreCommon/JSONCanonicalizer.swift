@@ -33,6 +33,8 @@ public enum JSONCanonicalizer {
                 if i > 0 { out += "," }
                 serializeString(key, into: &out)
                 out += ":"
+                // key comes from dict's own keys.
+                // swiftlint:disable:next force_unwrapping
                 try serialize(dict[key]!, into: &out)
             }
             out += "}"

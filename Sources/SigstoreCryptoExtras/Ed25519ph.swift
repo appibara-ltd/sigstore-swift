@@ -72,6 +72,8 @@ public enum Ed25519ph {
         0xed, 0xd3, 0xf5, 0x5c, 0x1a, 0x63, 0x12, 0x58, 0xd6, 0x9c, 0xf7, 0xa2, 0xde, 0xf9, 0xde, 0x14,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10,
     ]
+    // A 32-byte constant always fits in 4 limbs.
+    // swiftlint:disable:next force_unwrapping
     private static let orderLimbs: BigUInt.Limbs = BigUInt.limbs(bigEndian: orderLE.reversed(), count: 4)!
 
     /// "SigEd25519 no Ed25519 collisions" (RFC 8032 §2, dom2).
@@ -129,8 +131,12 @@ public enum Ed25519ph {
 
     /// A 64-byte little-endian integer mod L, as 32 little-endian bytes.
     static func reduceModOrder(_ digestLE: [UInt8]) -> [UInt8] {
+        // The input is a 64-byte SHA-512 digest: always 8 limbs.
+        // swiftlint:disable:next force_unwrapping
         let limbs = BigUInt.limbs(bigEndian: digestLE.reversed(), count: 8)!
         let r = BigUInt.remainder(limbs, orderLimbs)
+        // The remainder is below L < 2^253: always fits in 32 bytes.
+        // swiftlint:disable:next force_unwrapping
         return BigUInt.bigEndian(r, count: 32)!.reversed()
     }
 }

@@ -12,6 +12,8 @@ public enum Hex {
             out.append(digits[Int(b >> 4)])
             out.append(digits[Int(b & 0x0F)])
         }
+        // Hex digits are ASCII.
+        // swiftlint:disable:next optional_data_string_conversion
         return String(decoding: out, as: UTF8.self)
     }
 

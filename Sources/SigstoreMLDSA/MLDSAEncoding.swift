@@ -7,6 +7,8 @@
 /// `bytes[offset ..< offset + 32·bits]` (the inverse of SimpleBitPack,
 /// Algorithm 16/18). The caller guarantees the range is in bounds.
 func unpackBits(_ bytes: [UInt8], offset: Int, bits: Int) -> [Int64] {
+    // Internal invariant: callers check the key or signature length first.
+    // nosemgrep: swift-trap-in-library
     precondition(bits > 0 && bits <= 32 && offset >= 0 && offset + 32 * bits <= bytes.count)
     var out = [Int64](repeating: 0, count: 256)
     var acc: UInt64 = 0
@@ -45,6 +47,8 @@ func packBits(_ w: [Int64], bits: Int, into out: inout [UInt8]) {
 /// FIPS 204 Algorithm 23, pkDecode(pk) → (ρ, t1). `pk` must have the
 /// parameter set's public-key length.
 func pkDecode(_ pk: [UInt8], _ p: MLDSAParameters) -> (rho: [UInt8], t1: [Poly]) {
+    // Internal invariant: MLDSAPublicKey checks the length when it is created.
+    // nosemgrep: swift-trap-in-library
     precondition(pk.count == p.publicKeyLength)
     let rho = Array(pk[0..<32])
     var t1: [Poly] = []

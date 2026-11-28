@@ -69,6 +69,8 @@ enum BigUInt {
 
     /// a mod m by binary long division (m non-zero). Result has m.count limbs.
     static func remainder(_ a: Limbs, _ m: Limbs) -> Limbs {
+        // Internal invariant: callers pass a validated RSA modulus or the Ed25519 order, never zero.
+        // nosemgrep: swift-trap-in-library
         precondition(bitLength(m) > 0, "modulus must be non-zero")
         // r stays < m, so r << 1 | bit < 2m fits in m.count + 1 limbs.
         var r = Limbs(repeating: 0, count: m.count + 1)
@@ -95,6 +97,8 @@ struct MontgomeryContext: Sendable {
 
     /// n must be odd and normalized (top limb non-zero).
     init(modulus n: BigUInt.Limbs) {
+        // Internal invariant: RSAPublicKeyComponents rejects even, empty and short moduli before this.
+        // nosemgrep: swift-trap-in-library
         precondition(!n.isEmpty && n[0] & 1 == 1 && n[n.count - 1] != 0)
         self.n = n
         // Newton iteration for n0^-1 mod 2^64: each step doubles the number
@@ -144,6 +148,8 @@ struct MontgomeryContext: Sendable {
 
     /// base^e mod n for base < n and e >= 1.
     func power(_ base: BigUInt.Limbs, exponent e: UInt64) -> BigUInt.Limbs {
+        // Internal invariant: callers pass a validated public exponent (>= 3).
+        // nosemgrep: swift-trap-in-library
         precondition(e >= 1)
         let baseM = multiply(base, rSquared)
         var acc = baseM

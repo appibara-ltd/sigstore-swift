@@ -1,0 +1,110 @@
+# Static analysis of the Swift sources. CodeQL (codeql.yml) cannot analyse
+# Swift 6.4 yet (it supports 5.4-6.3), so:
+# - SwiftLint, with the bug-catching rules in .swiftlint.yml;
+# - Semgrep, with the project rules in .semgrep/ and the Swift rules of
+#   semgrep/semgrep-rules (pinned commit).
+# Both upload SARIF to code scanning and fail the job on any finding.
+name: Static analysis
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "15 4 * * 1"
+
+permissions: {}
+
+jobs:
+  swiftlint:
+    name: SwiftLint
+    runs-on: ubuntu-24.04
+    container: swift:6.4-noble
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      SWIFTLINT_VERSION: 0.65.1
+      SWIFTLINT_SHA256: caeed6f4a679c35539ffaf124f6c4ab4a8416917f7d8796279dc52b74026059d
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install SwiftLint
+        run: |
+          apt-get update -qq && apt-get install -y -qq unzip >/dev/null
+          curl -fsSL -o /tmp/swiftlint.zip \
+            "https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/swiftlint_linux_amd64.zip"
+          echo "${SWIFTLINT_SHA256}  /tmp/swiftlint.zip" | sha256sum -c -
+          unzip -q /tmp/swiftlint.zip -d /tmp/swiftlint
+          /tmp/swiftlint/swiftlint version
+
+      - name: Run SwiftLint
+        id: lint
+        run: |
+          status=0
+          /tmp/swiftlint/swiftlint lint --strict --reporter sarif --output swiftlint.sarif || status=$?
+          /tmp/swiftlint/swiftlint lint --strict --quiet || true
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@915412ff23e8b7659517e607487dbeae018f2934 # v4.39.5
+        with:
+          sarif_file: swiftlint.sarif
+          category: swiftlint
+
+      - name: Fail on findings
+        if: steps.lint.outputs.status != '0'
+        run: exit 1
+
+  semgrep:
+    name: Semgrep
+    runs-on: ubuntu-24.04
+    container: semgrep/semgrep:1.187.0@sha256:0c8dfa7aa1ca8c50233ec9110e8cd88d139dedd603d56507493f74c6f4b3e062
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      # semgrep/semgrep-rules (Semgrep Rules License v1.0), swift/ directory.
+      SEMGREP_RULES_COMMIT: a5ad1714f00c9f7fde980cab0ea1d6dc6d414fd2
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Fetch semgrep-rules
+        run: |
+          git init -q "$RUNNER_TEMP/semgrep-rules"
+          cd "$RUNNER_TEMP/semgrep-rules"
+          git fetch -q --depth 1 https://github.com/semgrep/semgrep-rules.git "$SEMGREP_RULES_COMMIT"
+          git checkout -q FETCH_HEAD
+          # Keep the rules only (the .swift files are the rules' own test cases).
+          find swift -name '*.swift' -delete
+
+      - name: Run Semgrep
+        id: scan
+        run: |
+          # Semgrep lists files with git; the checkout belongs to another user.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          status=0
+          semgrep scan --metrics=off --disable-version-check \
+            --config .semgrep/ --config "$RUNNER_TEMP/semgrep-rules/swift" \
+            --exclude Sources/SigstoreProtobufSpecs/Generated \
+            --sarif --output semgrep.sarif --error Sources || status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@915412ff23e8b7659517e607487dbeae018f2934 # v4.39.5
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+      - name: Fail on findings
+        if: steps.scan.outputs.status != '0'
+        run: exit 1

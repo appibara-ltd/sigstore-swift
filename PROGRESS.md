@@ -324,8 +324,8 @@ sorted signed attributes and the root EKU check, released as 0.3.0.
    (the maintainer's own answer), `crypto_keylength` (RSA keys from 1024
    bits are accepted, as Go's default `rsa1024min=1`; NIST minimum is
    2048), `crypto_weaknesses` (SHA-1 accepted in TSA tokens, as Go's
-   pkcs7), and the three `static_analysis*` criteria (no static analyser
-   covers the Swift code while CodeQL lacks Swift 6.4). Every public
+   pkcs7), and the three `static_analysis*` criteria, now covered by
+   `static-analysis.yml` (to be answered once it runs green). Every public
    declaration now has a doc comment; `.spi.yml` lets Swift Package Index
    host the DocC reference once the package is submitted there.
 3. **ML-DSA in X.509 certificates**, the only remaining verify gap
@@ -351,6 +351,14 @@ sorted signed attributes and the root EKU check, released as 0.3.0.
     (github/codeql `supported-versions-compilers.rst`) and Package.swift
     needs tools 6.4.
   - Dependabot uses the `swift` ecosystem in place of `gomod`.
+  - Static analysis of the Swift code (CodeQL lacks Swift 6.4):
+    `static-analysis.yml` runs SwiftLint 0.65.1 (`.swiftlint.yml`: style
+    rules off, since the code mirrors Go names; force unwraps/tries, lossy
+    UTF-8 decoding and similar on) and Semgrep 1.187.0 (`.semgrep/swift.yml`
+    plus semgrep/semgrep-rules' Swift rules at a pinned commit). The first
+    run's findings were all safe by construction and are annotated with the
+    reason, except `downloadTarget` with emptied hashes, which now throws
+    instead of trapping.
   - `SECURITY.md` points to GitHub private vulnerability reporting, and
     sends Sigstore issues to security@sigstore.dev (sigstore/.github
     `SECURITY.md`).

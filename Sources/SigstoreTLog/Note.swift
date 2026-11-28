@@ -77,6 +77,8 @@ public func noteKeyHash(origin: String, verifier: SignatureVerifier) throws -> U
 /// "subtree/v1" message for a checkpoint (`msg` must be exactly a checkpoint
 /// body with a 32-byte root hash and no extension lines). Nil on error.
 func formatCosignatureV1(origin: String, timestamp: UInt64, message: [UInt8]) -> [UInt8]? {
+    // message is note text that openNote took from a String: valid UTF-8.
+    // swiftlint:disable:next optional_data_string_conversion
     let text = String(decoding: message, as: UTF8.self)
     guard let cp = try? LogCheckpoint(text: text) else { return nil }
     let lines = text.split(separator: "\n", maxSplits: 3, omittingEmptySubsequences: false)
@@ -126,12 +128,16 @@ public func openNote(_ message: String, verifier: NoteVerifier) throws -> Opened
     var unverified = 0
     var numSig = 0
     while !sigs.isEmpty {
+        // sigs is non-empty and ends with a newline (checked above).
+        // swiftlint:disable:next force_unwrapping
         let i = sigs.firstIndex(of: 0x0A)!
         var line = Array(sigs[..<i])
         sigs = sigs[(i + 1)...]
 
         guard line.starts(with: prefix) else { throw malformed }
         line.removeFirst(prefix.count)
+        // A slice of a String's UTF-8 cut at ASCII bytes: valid UTF-8.
+        // swiftlint:disable:next optional_data_string_conversion
         let lineString = String(decoding: line, as: UTF8.self)
         let name: String
         let b64: String
@@ -164,6 +170,8 @@ public func openNote(_ message: String, verifier: NoteVerifier) throws -> Opened
     }
     guard !verified.isEmpty else { throw SigstoreError("note has no verifiable signatures") }
     return OpenedNote(
+        // A slice of a String's UTF-8 cut at a newline: valid UTF-8.
+        // swiftlint:disable:next optional_data_string_conversion
         text: String(decoding: text, as: UTF8.self), verifiedSignatures: verified, unverifiedSignatureCount: unverified)
 }
 

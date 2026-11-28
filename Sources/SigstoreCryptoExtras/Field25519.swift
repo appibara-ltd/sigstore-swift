@@ -27,6 +27,8 @@ struct FieldElement: Sendable {
 
     /// A small constant (< 2^51).
     init(small value: UInt64) {
+        // Internal invariant: only called with small constants.
+        // nosemgrep: swift-trap-in-library
         precondition(value <= Self.mask51)
         self.init(l0: value, l1: 0, l2: 0, l3: 0, l4: 0)
     }

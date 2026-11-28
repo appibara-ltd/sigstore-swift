@@ -650,7 +650,7 @@ public enum TSAVerification {
         for chain in chains {
             var chainOK = true
             for cert in chain.dropFirst().dropLast() {
-                if let eku = try cert.extensions.extendedKeyUsage, eku.count > 0,
+                if let eku = try cert.extensions.extendedKeyUsage, !eku.isEmpty,
                     !(eku.contains(.timeStamping) || eku.contains(.any))
                 {
                     chainOK = false
@@ -697,7 +697,7 @@ struct TimestampingPolicy: VerifierPolicy {
             } catch {
                 return .failsToMeetPolicy(reason: "invalid extended key usage extension: \(error)")
             }
-            guard let eku, eku.count > 0 else { continue }
+            guard let eku, !eku.isEmpty else { continue }
             if !(eku.contains(.timeStamping) || eku.contains(.any)) {
                 return .failsToMeetPolicy(
                     reason: "certificate at chain position \(index) does not permit time stamping")

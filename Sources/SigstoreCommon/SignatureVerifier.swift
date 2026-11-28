@@ -167,6 +167,7 @@ extension Certificate.PublicKey {
     public var pkixBytes: [UInt8] {
         var serializer = DER.Serializer()
         // Serializing an already-parsed key cannot fail.
+        // swiftlint:disable:next force_try
         try! serializer.serialize(self)
         return serializer.serializedBytes
     }

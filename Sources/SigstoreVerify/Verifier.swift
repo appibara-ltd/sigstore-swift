@@ -43,8 +43,6 @@ public struct VerifierConfig: Sendable {
     /// Whether timestamp checks are skipped (for key-signed entities).
     public internal(set) var allowNoTimestamp = false
 
-    init() {}
-
     /// Mirrors `VerifierConfig.Validate`.
     public func validate() throws {
         if allowNoTimestamp
