@@ -224,6 +224,9 @@ public struct HTTPRetryTransport: HTTPTransport {
             if delay >= waitMax / 2 { return waitMax }
             delay *= 2
         }
+        // Jitter only spreads out retry timing (httpretry uses math/rand/v2);
+        // it protects nothing, so it needs no cryptographic randomness.
+        // nosemgrep: insecure-random
         return delay > waitMin ? Double.random(in: waitMin..<delay) : waitMin
     }
 
