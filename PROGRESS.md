@@ -11,8 +11,12 @@ provider protocols (`CertificateProvider`, `CertificateChainProvider`,
 `Transparency`) and `bundle(_:keypair:options:)`, which builds a v0.3
 bundle and, given trusted material, verifies it before returning it.
 Tests port keys_test.go, content_test.go and signer_test.go and round-trip
-every algorithm through `Verifier`. Next stages: Fulcio, Rekor v1/v2, TSA
-(see Next steps). `swift test`: 226 tests.
+every algorithm through `Verifier`. Stage 2 adds `TimestampAuthority`
+(RFC 3161 requests, `BundleOptions.timestampAuthorities`) and the HTTP
+plumbing the later clients share: `HTTPTransport`, `URLSessionTransport`
+and `HTTPRetryTransport` (sigstore `httpretry`), tested against a fake
+transport serving `TestTSA` responses. Next stages: Fulcio, Rekor v1/v2
+(see Next steps). `swift test`: 245 tests.
 
 **0.3.1 released (tag on 060de42), the first release made by the
 tag-triggered `release.yml`:** immutable, with the source archive and its
@@ -359,10 +363,9 @@ sorted signed attributes and the root EKU check, released as 0.3.0. The
    before starting.
 4. **Signing** (sigstore-go `pkg/sign`), in stages, each its own PR:
    1. done: keys, content, provider protocols, `bundle` (no network);
-   2. `TimestampAuthority` (RFC 3161 requests) and its `BundleOptions`
-      field (`timestamping.go`);
-   3. `Fulcio` (`certificate.go`) with retries and user agent
-      (`retry.go`, `useragent.go`);
+   2. done: `TimestampAuthority` (`timestamping.go`) with retries and user
+      agent (`retry.go`, `useragent.go`);
+   3. `Fulcio` (`certificate.go`);
    4. `Rekor` v1 and v2 (`transparency.go`);
    5. OIDC token handling (`identity_*.go`), then sigstore-conformance's
       sign tests in the conformance client.
@@ -417,6 +420,16 @@ sorted signed attributes and the root EKU check, released as 0.3.0. The
   - `EphemeralKeypair` cannot sign Ed25519ph (swift-crypto has none; the
     hand-written `SigstoreCryptoExtras` is verify-only) and throws for it.
     `MLDSAKeypair` (Go 1.26 `crypto/mldsa`) is not ported.
+  - HTTP: Go's `http.RoundTripper` is `HTTPTransport` (`URLSessionTransport`
+    by default, capped at 16 MiB per response); sigstore `httpretry` is
+    `HTTPRetryTransport` (same policy and backoff; a `URLError` timeout,
+    certificate or URL error is not retried). The client `Timeout` covers
+    retries, as Go's `http.Client.Timeout` does. The user agent is
+    "sigstore-swift" (Go: "sigstore-go/<version>"; the package has no
+    version constant).
+  - `TimestampAuthority.timestamp(signature:)` (Go `GetTimestamp`) rejects
+    a response over 1 MiB; Go reads only the first 1 MiB, which then fails
+    to parse.
 - Mirror sigstore-go names (see AGENTS.md for translation rules).
 - Protobuf types generated from protobuf-specs @ `a84bc5ff572a` (the commit
   sigstore-go v1.4.1 pins) with swift-protobuf 1.41.0; generated code checked

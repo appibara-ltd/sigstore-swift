@@ -12,8 +12,6 @@ import X509
 let bundleV03MediaType = "application/vnd.dev.sigstore.bundle.v0.3+json"
 
 /// Mirrors `sign.BundleOptions`.
-///
-/// Timestamp authorities are not supported yet.
 public struct BundleOptions: Sendable {
     /// Optional certificate provider, typically Fulcio. The bundle then holds
     /// a certificate instead of a public key hint.
@@ -24,6 +22,8 @@ public struct BundleOptions: Sendable {
     public var certificateChainProvider: (any CertificateChainProvider)?
     /// Optional options for the certificate provider.
     public var certificateProviderOptions: CertificateProviderOptions?
+    /// Optional timestamp authorities to get signed timestamps from.
+    public var timestampAuthorities: [TimestampAuthority]
     /// Optional transparency logs to get entries from.
     public var transparencyLogs: [any Transparency]
     /// Optional trusted material: when set, the new bundle is verified
@@ -35,12 +35,14 @@ public struct BundleOptions: Sendable {
         certificateProvider: (any CertificateProvider)? = nil,
         certificateChainProvider: (any CertificateChainProvider)? = nil,
         certificateProviderOptions: CertificateProviderOptions? = nil,
+        timestampAuthorities: [TimestampAuthority] = [],
         transparencyLogs: [any Transparency] = [],
         trustedRoot: (any TrustedMaterial)? = nil
     ) {
         self.certificateProvider = certificateProvider
         self.certificateChainProvider = certificateChainProvider
         self.certificateProviderOptions = certificateProviderOptions
+        self.timestampAuthorities = timestampAuthorities
         self.transparencyLogs = transparencyLogs
         self.trustedRoot = trustedRoot
     }
@@ -48,7 +50,8 @@ public struct BundleOptions: Sendable {
 
 /// Mirrors `sign.Bundle`: signs `content` with `keypair` and returns a v0.3
 /// bundle, with the verification material from the certificate (chain)
-/// provider or the key's hint, and entries from the transparency logs.
+/// provider or the key's hint, signed timestamps over the signature from
+/// the timestamp authorities, and entries from the transparency logs.
 /// When `options.trustedRoot` is set, the bundle is verified before it is
 /// returned.
 ///
@@ -108,6 +111,15 @@ public func bundle(
         material.publicKey = identifier
         verifierPEM = try keypair.publicKeyPem()
     }
+
+    if !options.timestampAuthorities.isEmpty {
+        for authority in options.timestampAuthorities {
+            var signedTimestamp = Dev_Sigstore_Common_V1_RFC3161SignedTimestamp()
+            signedTimestamp.signedTimestamp = try await authority.timestamp(signature: signature)
+            material.timestampVerificationData.rfc3161Timestamps.append(signedTimestamp)
+        }
+        verifierOptions.append(.withSignedTimestamps(threshold: options.timestampAuthorities.count))
+    }
     bundle.verificationMaterial = material
 
     let hasCertificate = options.certificateProvider != nil || options.certificateChainProvider != nil
@@ -116,16 +128,21 @@ public func bundle(
             try await log.transparencyLogEntry(keyOrCertPEM: Data(verifierPEM.utf8), bundle: &bundle)
         }
         verifierOptions.append(.withTransparencyLog(threshold: options.transparencyLogs.count))
-        // Rekor v2 gives no integrated timestamps; it needs a timestamp
-        // authority, which a later stage adds.
-        if hasCertificate {
-            verifierOptions.append(.withIntegratedTimestamps(threshold: options.transparencyLogs.count))
-        } else {
-            verifierOptions.append(.withNoObserverTimestamps())
+        // Rekor v2 gives no integrated timestamps: verification then needs
+        // a timestamp authority.
+        if options.timestampAuthorities.isEmpty {
+            // Use Rekor's integrated time only with a certificate; a bare
+            // key needs no time.
+            verifierOptions.append(
+                hasCertificate
+                    ? .withIntegratedTimestamps(threshold: options.transparencyLogs.count)
+                    : .withNoObserverTimestamps())
         }
-    } else {
-        // Without timestamps, verify a certificate at the current time, and
-        // a bare key without time.
+    }
+
+    // Without any timestamp, verify a certificate at the current time, and
+    // a bare key without time.
+    if options.timestampAuthorities.isEmpty && options.transparencyLogs.isEmpty {
         verifierOptions.append(hasCertificate ? .withCurrentTime() : .withNoObserverTimestamps())
     }
 
