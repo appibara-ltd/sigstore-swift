@@ -70,6 +70,31 @@ guard result.statement?.predicateType == "https://slsa.dev/provenance/v1" else {
 }
 ```
 
+## Using it securely
+
+A successful `verify` only means what the policy asked for. Do:
+
+- **Pin the signer's identity.** Pass a `CertificateIdentity` with the
+  expected OIDC issuer and an exact SAN, or a SAN regex anchored with `^`
+  and with `.` escaped. An unanchored or loose regex such as `OWNER/REPO`
+  also matches `OWNER/REPO-fork` or another owner's repository.
+- **Bind the result to your artifact.** Pass the artifact (`withArtifact`)
+  or a digest you computed yourself (`withArtifactDigest`), never a digest
+  read from the bundle.
+- **Get trusted roots from a trusted source:** `fetchTrustedRoot()` (TUF,
+  public-good) or a TUF repository you trust. Never take
+  `trusted_root.json` from the same place as the bundle.
+- **Keep the thresholds** for transparency log entries, timestamps and SCTs
+  at 1 or more.
+- **Check what was attested,** for example the statement's
+  `predicateType`, before acting on it.
+- **Treat any thrown error as a failed verification.** Do not fall back to
+  using the artifact unverified.
+
+Don't use `withoutIdentitiesUnsafe()` or `withoutArtifactUnsafe()` outside
+tests: they verify that a signature is valid, but not who made it or what
+it covers.
+
 ## Other Sigstore instances
 
 `SigstoreTUF.Options` points the TUF client at another repository. For
