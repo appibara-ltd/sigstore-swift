@@ -4,14 +4,18 @@
 /// plays the same role. Where sigstore-go defines a named error type or
 /// sentinel, the corresponding Swift module defines a named type instead.
 public struct SigstoreError: Error, CustomStringConvertible, Sendable {
+    /// The error message.
     public let message: String
+    /// The wrapped cause, if any.
     public let underlying: (any Error)?
 
+    /// Creates an error with `message`, optionally wrapping `underlying`.
     public init(_ message: String, underlying: (any Error)? = nil) {
         self.message = message
         self.underlying = underlying
     }
 
+    /// `message`, followed by `: ` and the underlying error when present.
     public var description: String {
         if let underlying {
             return "\(message): \(underlying)"

@@ -319,6 +319,15 @@ sorted signed attributes and the root EKU check, released as 0.3.0.
    enables private vulnerability reporting and Dependabot alerts in the
    repository settings; confirm the first Scorecard, CodeQL and Dependabot
    runs; add `swift` to CodeQL once it supports Swift 6.4.
+   OpenSSF Best Practices (metal series): project 17219, passing level
+   90% (2026-11-28). Open: `know_secure_design` and `know_common_errors`
+   (the maintainer's own answer), `crypto_keylength` (RSA keys from 1024
+   bits are accepted, as Go's default `rsa1024min=1`; NIST minimum is
+   2048), `crypto_weaknesses` (SHA-1 accepted in TSA tokens, as Go's
+   pkcs7), and the three `static_analysis*` criteria (no static analyser
+   covers the Swift code while CodeQL lacks Swift 6.4). Every public
+   declaration now has a doc comment; `.spi.yml` lets Swift Package Index
+   host the DocC reference once the package is submitted there.
 3. **ML-DSA in X.509 certificates**, the only remaining verify gap
    (experimental, private deployments only; see "ML-DSA in X.509" above):
    upstream route (user decision, 2026-11-27; not yet). Follow or help

@@ -114,6 +114,9 @@ extension Summary {
         return o
     }
 
+    /// Decodes a summary from its Go JSON form; missing or null fields become
+    /// empty.
+    /// - Throws: An error if `value` is not an object or a field is not a string.
     public init(jsonObject value: JSONValue) throws {
         guard case .object(let o) = value else { throw SigstoreError("certificate summary is not a JSON object") }
         self.init(
@@ -140,12 +143,16 @@ extension Extensions {
         ("sourceRepositoryVisibilityAtSigning", \.sourceRepositoryVisibilityAtSigning),
     ]
 
+    /// The non-empty fields as Go JSON (`omitempty`) keyed by their Go JSON names.
     public var jsonObject: [String: JSONValue] {
         var o: [String: JSONValue] = [:]
         for (key, path) in Self.jsonFields where !self[keyPath: path].isEmpty { o[key] = .string(self[keyPath: path]) }
         return o
     }
 
+    /// Decodes extensions from their Go JSON form; missing or null fields become
+    /// empty.
+    /// - Throws: An error if `value` is not an object or a field is not a string.
     public init(jsonObject value: JSONValue) throws {
         try self.init(jsonObject: value, skipping: [])
     }

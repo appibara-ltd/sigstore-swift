@@ -71,13 +71,20 @@ public enum TSAHashAlgorithm: Sendable, Hashable {
 
 /// Mirrors digitorus `timestamp.Timestamp` (the fields sigstore uses).
 public struct RFC3161Timestamp: Sendable {
+    /// The TimeStampToken (CMS ContentInfo) bytes as they appear in the
+    /// response.
     public var rawToken: [UInt8]
+    /// Hash algorithm of the TSTInfo message imprint.
     public var hashAlgorithm: TSAHashAlgorithm
+    /// The message imprint's hashed message.
     public var hashedMessage: [UInt8]
+    /// The TSTInfo `genTime`.
     public var time: Date
+    /// The TSTInfo TSA policy OID.
     public var policy: ASN1ObjectIdentifier
     /// DER INTEGER content bytes, if present.
     public var nonce: ArraySlice<UInt8>?
+    /// Certificates embedded in the token's CMS SignedData.
     public var certificates: [Certificate]
 
     /// Mirrors `timestamp.ParseResponse`: `bytes` is a DER TimeStampResp
@@ -492,12 +499,16 @@ public enum TSAVerification {
     /// Mirrors `verification.VerifyOpts` (without `OID`, `Nonce` and
     /// `CommonName`, which sigstore-go does not set).
     public struct VerifyOpts: Sendable {
+        /// The expected TSA signing certificate, if pinned.
         public var tsaCertificate: Certificate?
+        /// Intermediate certificates for building the signer's chain.
         public var intermediates: [Certificate]
+        /// Trusted root certificates the signer's chain must end at.
         public var roots: [Certificate]
         /// Chain validation time; defaults to the timestamp's own time.
         public var currentTime: Date?
 
+        /// Creates verification options; `roots` is required.
         public init(
             tsaCertificate: Certificate? = nil, intermediates: [Certificate] = [], roots: [Certificate],
             currentTime: Date? = nil

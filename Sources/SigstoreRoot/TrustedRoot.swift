@@ -8,21 +8,29 @@ import SigstoreProtobufSpecs
 import SwiftProtobuf
 import X509
 
+/// Mirrors `TrustedRootMediaType01`: the only trusted root media type
+/// accepted.
 public let trustedRootMediaType01 = "application/vnd.dev.sigstore.trustedroot+json;version=0.1"
 
 /// Mirrors `root.TransparencyLog` (used for both Rekor and CT logs).
 public struct TransparencyLog: Sendable {
+    /// The log's base URL.
     public var baseURL: String
+    /// The log ID (its key ID) as raw bytes.
     public var id: Data
+    /// Start of the period the log is trusted for; `nil` means unbounded.
     public var validityPeriodStart: Date?
+    /// End of the period the log is trusted for; `nil` means unbounded.
     public var validityPeriodEnd: Date?
     /// Hash used by the log's Merkle tree.
     public var hashFunc: HashFunc
+    /// The log's public key, used to verify its signatures.
     public var publicKey: SigstorePublicKey
     /// Hash used when verifying signatures made by `publicKey` (unused for
     /// ML-DSA, which signs the message: Go `crypto.Hash(0)`).
     public var signatureHashFunc: HashFunc
 
+    /// Creates a transparency log description from its fields.
     public init(
         baseURL: String,
         id: Data,
@@ -44,10 +52,16 @@ public struct TransparencyLog: Sendable {
 
 /// Mirrors `root.TrustedRoot`.
 public struct TrustedRoot: TrustedMaterial {
+    /// The protobuf this root was parsed from; `nil` when created with
+    /// ``init(mediaType:certificateAuthorities:certificateTransparencyLogs:timestampAuthorities:transparencyLogs:)``.
     public let protobuf: Dev_Sigstore_Trustroot_V1_TrustedRoot?
+    /// Trusted Rekor logs, keyed by hex-encoded log ID.
     public let rekorLogs: [String: TransparencyLog]
+    /// Trusted Fulcio certificate authorities.
     public let fulcioCertificateAuthorities: [any CertificateAuthority]
+    /// Trusted certificate transparency logs, keyed by hex-encoded log ID.
     public let ctLogs: [String: TransparencyLog]
+    /// Trusted RFC 3161 timestamping authorities.
     public let timestampingAuthorities: [any TimestampingAuthority]
 
     /// Mirrors `NewTrustedRootFromProtobuf`.

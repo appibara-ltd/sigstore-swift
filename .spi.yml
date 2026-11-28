@@ -1,0 +1,17 @@
+# Swift Package Index configuration: builds and hosts the DocC reference
+# documentation for the library modules.
+# https://swiftpackageindex.com/swiftpackageindex/spimanifest/documentation/spimanifest
+version: 1
+builder:
+  configs:
+    - documentation_targets:
+        - Sigstore
+        - SigstoreVerify
+        - SigstoreRoot
+        - SigstoreBundle
+        - SigstoreTLog
+        - SigstoreTUF
+        - SigstoreFulcio
+        - SigstoreMLDSA
+        - SigstoreCryptoExtras
+        - SigstoreCommon

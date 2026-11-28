@@ -7,6 +7,8 @@
 
 import Foundation
 
+/// RFC 8785 JSON canonicalization for the JSON shapes Sigstore
+/// canonicalizes; non-integer numbers are rejected.
 public enum JSONCanonicalizer {
     /// Mirrors `jsoncanonicalizer.Transform`.
     public static func transform(_ json: Data) throws -> Data {

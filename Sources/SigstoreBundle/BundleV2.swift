@@ -11,6 +11,7 @@ import X509
 
 /// Mirrors `bundle.BundleV2`.
 public struct BundleV2: VerifiableEntity {
+    /// The validated protobuf v2 bundle.
     public let protobuf: Dev_Sigstore_Bundle_V2_Bundle
 
     /// Mirrors `NewBundleV2`.
@@ -60,21 +61,26 @@ public struct BundleV2: VerifiableEntity {
         }
     }
 
+    /// Whether the verification material is a transparency log proof.
     public var hasTransparencyLogProof: Bool {
         if case .transparencyLogProof = protobuf.verificationMaterial.content { return true }
         return false
     }
 
+    /// Whether the verification material is an X.509 certificate.
     public var hasCertificate: Bool {
         if case .certificate = protobuf.verificationMaterial.content { return true }
         return false
     }
 
+    /// Whether the verification material is a public key.
     public var hasPublicKey: Bool {
         if case .publicKey = protobuf.verificationMaterial.content { return true }
         return false
     }
 
+    /// Whether the bundle carries an embedded DSSE payload (Go
+    /// `BundleV2.HasEnvelope`).
     public var hasEnvelope: Bool { protobuf.hasPayload }
 
     /// Mirrors `BundleV2.Version`: only `v2.0` is accepted.

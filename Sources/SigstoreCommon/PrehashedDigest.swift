@@ -11,10 +11,13 @@ protocol PrehashedDigest: Digest {
 }
 
 extension PrehashedDigest {
+    /// Calls `body` with the digest bytes.
     public func withUnsafeBytes<R>(_ body: (UnsafeRawBufferPointer) throws -> R) rethrows -> R {
         try bytes.withUnsafeBytes(body)
     }
+    /// Iterates over the digest bytes.
     public func makeIterator() -> IndexingIterator<[UInt8]> { bytes.makeIterator() }
+    /// The digest as hex, for debugging.
     public var description: String { "Prehashed digest: \(Hex.encode(bytes))" }
 }
 

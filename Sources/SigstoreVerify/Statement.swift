@@ -6,19 +6,27 @@ import SigstoreCommon
 import SigstoreProtobufSpecs
 import SwiftProtobuf
 
+/// The DSSE payload type of an in-toto statement (in-toto `PayloadType`).
 public let intotoMediaType = "application/vnd.in-toto+json"
 
 /// Mirrors in-toto `v1.ResourceDescriptor`.
 public struct ResourceDescriptor: Sendable, Hashable {
+    /// The resource name, such as a file name.
     public var name: String
+    /// A URI identifying the resource.
     public var uri: String
     /// Algorithm name → lowercase hex digest.
     public var digest: [String: String]
+    /// The resource content itself, if embedded.
     public var content: Data
+    /// A location the resource can be downloaded from.
     public var downloadLocation: String
+    /// The resource's media type.
     public var mediaType: String
+    /// Additional free-form annotations, if any.
     public var annotations: Google_Protobuf_Struct?
 
+    /// Creates a resource descriptor; every field defaults to empty.
     public init(
         name: String = "", uri: String = "", digest: [String: String] = [:], content: Data = Data(),
         downloadLocation: String = "", mediaType: String = "", annotations: Google_Protobuf_Struct? = nil
@@ -55,11 +63,16 @@ public struct ResourceDescriptor: Sendable, Hashable {
 /// Mirrors in-toto `v1.Statement` (Go `*in_toto.Statement`). `predicate` is
 /// nil when the verifier was configured with `.withoutStatementPredicate()`.
 public struct Statement: Sendable {
+    /// The statement type (`_type`).
     public var type: String
+    /// The artifacts the statement is about.
     public var subject: [ResourceDescriptor]
+    /// A URI identifying the predicate's type.
     public var predicateType: String
+    /// The predicate, or `nil` if absent or omitted.
     public var predicate: Google_Protobuf_Struct?
 
+    /// Creates a statement from its fields.
     public init(
         type: String, subject: [ResourceDescriptor], predicateType: String,
         predicate: Google_Protobuf_Struct? = nil
@@ -70,6 +83,7 @@ public struct Statement: Sendable {
         self.predicate = predicate
     }
 
+    /// Creates a statement from the in-toto protobuf message.
     public init(protobuf pb: InTotoAttestation_V1_Statement) {
         self.init(
             type: pb.type, subject: pb.subject.map(ResourceDescriptor.init), predicateType: pb.predicateType,

@@ -16,7 +16,9 @@ import SwiftProtobuf
 
 /// Mirrors a sumdb `note.Verifier` built by rekor-tiles `NewNoteVerifier`.
 public struct NoteVerifier: Sendable {
+    /// The verifier's key name: the log origin passed to the initializer.
     public let name: String
+    /// The 4-byte key hash that signature lines must carry to match this key.
     public let keyHash: UInt32
     let verifier: SignatureVerifier
 
@@ -99,6 +101,7 @@ public struct OpenedNote: Sendable {
     public var text: String
     /// Names and key hashes of the verified signatures.
     public var verifiedSignatures: [(name: String, hash: UInt32)]
+    /// The number of distinct signature lines by unknown keys (ignored).
     public var unverifiedSignatureCount: Int
 }
 
@@ -166,8 +169,11 @@ public func openNote(_ message: String, verifier: NoteVerifier) throws -> Opened
 
 /// Mirrors transparency-dev/formats `log.Checkpoint`.
 public struct LogCheckpoint: Sendable, Equatable {
+    /// The log origin (first line); never empty after parsing.
     public var origin: String
+    /// The tree size the checkpoint commits to.
     public var size: UInt64
+    /// The Merkle root hash, base64-decoded.
     public var hash: [UInt8]
 
     /// Mirrors `Checkpoint.Unmarshal`: origin, decimal size and base64 root

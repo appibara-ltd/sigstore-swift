@@ -19,12 +19,20 @@ private let goZeroTime = Date(timeIntervalSince1970: -62_135_596_800)
 /// Mirrors `root.Service`. An unset validity bound (Go's zero `time.Time`)
 /// is `nil`.
 public struct Service: Sendable, Equatable, CustomStringConvertible {
+    /// The service URL.
     public var url: String
+    /// The major API version the service implements.
     public var majorAPIVersion: UInt32
+    /// Start of the service's validity period; `nil` means unbounded.
     public var validityPeriodStart: Date?
+    /// End of the service's validity period; `nil` means unbounded.
     public var validityPeriodEnd: Date?
+    /// The service operator;
+    /// ``selectServices(_:config:supportedAPIVersions:currentTime:)`` picks at
+    /// most one service per operator.
     public var `operator`: String
 
+    /// Creates a service description.
     public init(
         url: String,
         majorAPIVersion: UInt32,
@@ -77,6 +85,7 @@ public struct Service: Sendable, Equatable, CustomStringConvertible {
     /// Sort key: Go orders an unset start as its zero time.
     fileprivate var startKey: Date { validityPeriodStart ?? goZeroTime }
 
+    /// A debug description: URL, API version, validity bounds and operator.
     public var description: String {
         let start = validityPeriodStart.map { "\($0)" } ?? "unset"
         let end = validityPeriodEnd.map { "\($0)" } ?? "unset"
@@ -86,9 +95,12 @@ public struct Service: Sendable, Equatable, CustomStringConvertible {
 
 /// Mirrors `root.ServiceConfiguration`.
 public struct ServiceConfiguration: Sendable, Equatable {
+    /// How many services to pick: `ALL`, `ANY` or `EXACT` (`count`).
     public var selector: Dev_Sigstore_Trustroot_V1_ServiceSelector
+    /// The number of services to pick with the `EXACT` selector.
     public var count: UInt32
 
+    /// Creates a service configuration.
     public init(selector: Dev_Sigstore_Trustroot_V1_ServiceSelector = .undefined, count: UInt32 = 0) {
         self.selector = selector
         self.count = count
@@ -226,6 +238,7 @@ func selectExact<T, G: RandomNumberGenerator>(_ slice: [T], count: UInt32, using
 /// mutates the receiver and returns it). A missing `rekorTlogConfig` /
 /// `tsaConfig` reads as an empty configuration (Go dereferences nil).
 public struct SigningConfig: Sendable, CustomStringConvertible {
+    /// The underlying signing config protobuf.
     public private(set) var protobuf: Dev_Sigstore_Trustroot_V1_SigningConfig
 
     /// Mirrors `NewSigningConfigFromProtobuf`.

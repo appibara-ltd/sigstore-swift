@@ -31,14 +31,19 @@ public indirect enum JSONValue: Sendable, Equatable {
         guard parser.index == parser.bytes.count else { throw SigstoreError("invalid JSON: trailing data") }
     }
 
+    /// The member named `key` if this is an object; otherwise `nil`.
     public subscript(key: String) -> JSONValue? {
         if case .object(let o) = self { return o[key] }
         return nil
     }
 
+    /// The members if this is an object; otherwise `nil`.
     public var objectValue: [String: JSONValue]? { if case .object(let o) = self { return o } else { return nil } }
+    /// The elements if this is an array; otherwise `nil`.
     public var arrayValue: [JSONValue]? { if case .array(let a) = self { return a } else { return nil } }
+    /// The string if this is a string; otherwise `nil`.
     public var stringValue: String? { if case .string(let s) = self { return s } else { return nil } }
+    /// The boolean if this is a boolean; otherwise `nil`.
     public var boolValue: Bool? { if case .bool(let b) = self { return b } else { return nil } }
 
     /// The value as an Int64 if it is a JSON number Go's `json.Number.Int64`

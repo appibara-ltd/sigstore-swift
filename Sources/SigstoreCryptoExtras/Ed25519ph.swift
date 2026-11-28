@@ -16,9 +16,13 @@ import Foundation
 ///   Rejecting them can only turn a Go "valid" into "invalid"; no honest key
 ///   generator produces such encodings.
 public enum Ed25519ph {
+    /// The length of an Ed25519ph signature, in bytes.
     public static let signatureLength = 64
+    /// The length of an encoded Ed25519 public key, in bytes.
     public static let publicKeyLength = 32
+    /// The length of the SHA-512 prehash, in bytes.
     public static let prehashLength = 64
+    /// The maximum context length, in bytes (RFC 8032 §5.1).
     public static let maxContextLength = 255
 
     /// RFC 8032 Ed25519ph verification of `signature` (64 bytes) over the

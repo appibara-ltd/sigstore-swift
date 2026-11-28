@@ -6,7 +6,10 @@ import Crypto
 import Foundation
 import SigstoreCommon
 
+/// RFC 6962 / RFC 9162 Merkle tree hashing (SHA-256) and inclusion proof
+/// verification.
 public enum Merkle {
+    /// Returns the RFC 6962 leaf hash `SHA-256(0x00 || leaf)`.
     public static func hashLeaf<D: DataProtocol>(_ leaf: D) -> [UInt8] {
         var h = SHA256()
         h.update(data: [0x00])
@@ -14,6 +17,7 @@ public enum Merkle {
         return Array(h.finalize())
     }
 
+    /// Returns the RFC 6962 interior node hash `SHA-256(0x01 || l || r)`.
     public static func hashChildren(_ l: [UInt8], _ r: [UInt8]) -> [UInt8] {
         var h = SHA256()
         h.update(data: [0x01])

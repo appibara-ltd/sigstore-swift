@@ -11,6 +11,7 @@ let maxAllowedSubjectDigests = 32
 
 /// Mirrors `ErrDSSEInvalidSignatureCount`.
 public struct DSSEInvalidSignatureCountError: Error, CustomStringConvertible, Sendable {
+    /// The message `exactly one signature is required`.
     public var description: String { "exactly one signature is required" }
 }
 

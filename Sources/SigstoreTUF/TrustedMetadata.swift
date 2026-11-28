@@ -6,9 +6,13 @@ import Foundation
 
 /// Mirrors `trustedmetadata.TrustedMetadata`.
 public struct TrustedMetadata: Sendable {
+    /// The trusted root.
     public private(set) var root: Metadata<RootType>
+    /// The trusted snapshot, once loaded.
     public private(set) var snapshot: Metadata<SnapshotType>?
+    /// The trusted timestamp, once loaded.
     public private(set) var timestamp: Metadata<TimestampType>?
+    /// The trusted top-level and delegated targets, by role name.
     public private(set) var targets: [String: Metadata<TargetsType>] = [:]
     /// Reference time for expiry checks (fixed at creation, as in go-tuf).
     public var refTime: Date

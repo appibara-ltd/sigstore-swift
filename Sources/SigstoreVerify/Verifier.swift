@@ -7,22 +7,40 @@ import SigstoreRoot
 import SigstoreTLog
 import X509
 
+/// Mirrors `verify.VerificationResultMediaType01`: the media type of a
+/// ``VerificationResult``.
 public let verificationResultMediaType01 = "application/vnd.dev.sigstore.verificationresult+json;version=0.1"
 
 /// Mirrors `verify.VerifierConfig`.
 public struct VerifierConfig: Sendable {
+    /// Whether RFC 3161 timestamps are required to verify short-lived certificates.
     public internal(set) var requireSignedTimestamps = false
+    /// The minimum number of verified RFC 3161 timestamps.
     public internal(set) var signedTimestampThreshold = 0
+    /// Whether log entry integrated timestamps are required to verify short-lived
+    /// certificates.
     public internal(set) var requireIntegratedTimestamps = false
+    /// The minimum number of verified log entry integrated timestamps.
     public internal(set) var integratedTimeThreshold = 0
+    /// Whether RFC 3161 and/or log integrated timestamps are required to verify
+    /// short-lived certificates.
     public internal(set) var requireObserverTimestamps = false
+    /// The minimum number of verified RFC 3161 and/or log integrated timestamps.
     public internal(set) var observerTimestampThreshold = 0
+    /// Whether transparency log inclusion proofs are required.
     public internal(set) var requireTlogEntries = false
+    /// The minimum number of verified transparency log entries.
     public internal(set) var tlogEntriesThreshold = 0
+    /// Whether SCTs are required in Fulcio certificates.
     public internal(set) var requireSCTs = false
+    /// Whether ``VerificationResult/statement`` is built without parsing the
+    /// predicate (which is then `nil`).
     public internal(set) var omitStatementPredicate = false
+    /// The minimum number of verified SCTs in a Fulcio certificate.
     public internal(set) var ctlogEntriesThreshold = 0
+    /// Whether the current time is used instead of a signed or log timestamp.
     public internal(set) var useCurrentTime = false
+    /// Whether timestamp checks are skipped (for key-signed entities).
     public internal(set) var allowNoTimestamp = false
 
     init() {}
@@ -114,7 +132,10 @@ public struct VerifierOption: Sendable {
 
 /// Mirrors `verify.SignatureVerificationResult`.
 public struct SignatureVerificationResult: Sendable {
+    /// The UTF-8 bytes of the verifying key's hint, for key-signed entities.
     public var publicKeyID: Data?
+    /// A summary of the verified signing certificate, for certificate-signed
+    /// entities.
     public var certificate: Summary?
 }
 
@@ -122,22 +143,31 @@ public struct SignatureVerificationResult: Sendable {
 public struct TimestampVerificationResult: Sendable, Hashable {
     /// "Tlog", "TimestampAuthority" or "CurrentTime".
     public var type: String
+    /// The URL of the log or timestamp authority, if any.
     public var uri: String
+    /// The verified time.
     public var timestamp: Date
 }
 
 /// Mirrors `verify.VerificationResult`.
 public struct VerificationResult: Sendable {
+    /// The result's media type, ``verificationResultMediaType01``.
     public var mediaType: String = verificationResultMediaType01
+    /// The in-toto statement, if the entity is a DSSE envelope carrying one.
     public var statement: Statement?
+    /// Details of the verified signature.
     public var signature: SignatureVerificationResult?
+    /// The timestamps that were verified.
     public var verifiedTimestamps: [TimestampVerificationResult] = []
+    /// The certificate identity that matched the policy, if any.
     public var verifiedIdentity: CertificateIdentity?
 }
 
 /// Mirrors `verify.Verifier`.
 public struct Verifier: Sendable {
+    /// The trust roots used for verification.
     public let trustedMaterial: any TrustedMaterial
+    /// The validated configuration built from the options.
     public let config: VerifierConfig
 
     /// Mirrors `NewVerifier`.

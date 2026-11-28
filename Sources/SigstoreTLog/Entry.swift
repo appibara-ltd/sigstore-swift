@@ -9,6 +9,7 @@ import X509
 
 /// Mirrors `tlog.ErrNilValue`.
 public struct NilValueError: Error, CustomStringConvertible, Sendable {
+    /// The error message, matching Go's `ErrNilValue` text.
     public var description: String { "validation error: nil value in transaction log entry" }
 }
 
@@ -28,12 +29,16 @@ public enum RekorV1Entry: Sendable {
 
 /// Mirrors `tlog.Entry`.
 public struct Entry: Sendable {
+    /// The entry kind from the body (e.g. `hashedrekord`, `dsse`, `intoto`).
     public let kind: String
+    /// The entry API version from the body (e.g. `0.0.1`, `0.0.2`).
     public let version: String
+    /// The decoded Rekor v1 body, or `nil` for a Rekor v2 entry.
     public let rekorV1Entry: RekorV1Entry?
     /// Rekor v2 (rekor-tiles) body; only hashedrekord 0.0.2 is accepted.
     public let rekorV2Entry: Dev_Sigstore_Rekor_V2_Entry?
     let signedEntryTimestamp: Data?
+    /// The protobuf transparency log entry this entry was built from.
     public let transparencyLogEntry: Dev_Sigstore_Rekor_V1_TransparencyLogEntry
 
     init(tle: Dev_Sigstore_Rekor_V1_TransparencyLogEntry) throws {
@@ -105,15 +110,21 @@ public struct Entry: Sendable {
     /// Raw log key ID bytes (Go returns them as a `string`).
     public var logKeyID: Data { transparencyLogEntry.logID.keyID }
 
+    /// The entry's index in the log (Go `Entry.LogIndex`).
     public var logIndex: Int64 { transparencyLogEntry.logIndex }
 
     /// Base64 of the canonicalized body (Go `Entry.Body`).
     public var body: String { Base64.encode(transparencyLogEntry.canonicalizedBody) }
 
+    /// Whether the entry carries a non-empty signed entry timestamp (inclusion
+    /// promise). Mirrors Go `Entry.HasInclusionPromise`.
     public var hasInclusionPromise: Bool { signedEntryTimestamp != nil }
 
+    /// Whether the entry carries an inclusion proof. Mirrors Go
+    /// `Entry.HasInclusionProof`.
     public var hasInclusionProof: Bool { transparencyLogEntry.hasInclusionProof }
 
+    /// Whether the body is a Rekor v2 entry (``rekorV2Entry`` is set).
     public var isRekorV2: Bool { rekorV2Entry != nil }
 
     /// Mirrors `Entry.GetHashedRekordDigest`. For Rekor v2 the algorithm is

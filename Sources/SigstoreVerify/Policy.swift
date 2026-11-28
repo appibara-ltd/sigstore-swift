@@ -8,9 +8,12 @@ import SigstoreCommon
 
 /// Mirrors `verify.ArtifactDigest`.
 public struct ArtifactDigest: Sendable, Hashable {
+    /// The digest algorithm name, such as `sha256`.
     public var algorithm: String
+    /// The raw digest bytes.
     public var digest: Data
 
+    /// Creates a digest from an algorithm name and raw digest bytes.
     public init(algorithm: String, digest: Data) {
         self.algorithm = algorithm
         self.digest = digest
@@ -21,6 +24,8 @@ public struct ArtifactDigest: Sendable, Hashable {
 public struct PolicyConfig: Sendable {
     var ignoreArtifact = false
     var ignoreIdentities = false
+    /// Mirrors `PolicyConfig.RequireSigningKey`: whether the entity must be signed
+    /// with a key rather than a certificate.
     public internal(set) var requireSigningKey = false
     var context: Data = Data()
     var certificateIdentities: CertificateIdentities = []
@@ -47,7 +52,11 @@ public struct PolicyConfig: Sendable {
         }
     }
 
+    /// Mirrors `PolicyConfig.RequireArtifact`: whether verification checks the
+    /// signature against a provided artifact or digest.
     public var requireArtifact: Bool { !ignoreArtifact }
+    /// Mirrors `PolicyConfig.RequireIdentities`: whether verification checks the
+    /// certificate against the provided identities.
     public var requireIdentities: Bool { !ignoreIdentities }
 }
 
@@ -166,10 +175,13 @@ public struct PolicyBuilder: Sendable {
     let artifactPolicy: ArtifactPolicyOption
     let policyOptions: [PolicyOption]
 
+    /// Mirrors `NewPolicy`: an artifact policy plus any further policy options.
+    /// Options are applied and validated by ``buildConfig()``.
     public init(_ artifactPolicy: ArtifactPolicyOption, _ options: PolicyOption...) {
         self.init(artifactPolicy, options: options)
     }
 
+    /// Mirrors `NewPolicy` with the options passed as an array.
     public init(_ artifactPolicy: ArtifactPolicyOption, options: [PolicyOption]) {
         self.artifactPolicy = artifactPolicy
         self.policyOptions = options

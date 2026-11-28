@@ -26,6 +26,7 @@ public protocol Fetcher: Sendable {
 /// rejected before its body is read, and the body is streamed and
 /// abandoned as soon as it exceeds `maxLength`, whatever the header says.
 public struct DefaultFetcher: Fetcher {
+    /// The `User-Agent` header sent with each request.
     public var userAgent: String
     /// Attempts for transport errors, 429 and 5xx responses.
     public var maxAttempts: Int
@@ -33,6 +34,13 @@ public struct DefaultFetcher: Fetcher {
     /// `protocolClasses`).
     public var sessionConfiguration: @Sendable () -> URLSessionConfiguration
 
+    /// Creates a fetcher.
+    ///
+    /// - Parameters:
+    ///   - userAgent: The `User-Agent` header value.
+    ///   - maxAttempts: Attempts for transport errors, 429 and 5xx responses.
+    ///   - sessionConfiguration: Builds the session configuration for each
+    ///     download.
     public init(
         userAgent: String = "sigstore-swift", maxAttempts: Int = 3,
         sessionConfiguration: @escaping @Sendable () -> URLSessionConfiguration = { .ephemeral }
@@ -42,6 +50,12 @@ public struct DefaultFetcher: Fetcher {
         self.sessionConfiguration = sessionConfiguration
     }
 
+    /// Downloads `url`, retrying with backoff on transport errors, 429 and
+    /// 5xx responses up to ``maxAttempts`` times.
+    ///
+    /// - Throws: ``TUFError/downloadHTTP(statusCode:url:)`` on a non-200
+    ///   status, ``TUFError/downloadLengthMismatch(_:)`` above `maxLength`
+    ///   bytes, ``TUFError/download(_:)`` on an invalid URL or transport error.
     public func downloadFile(_ url: String, maxLength: Int64) async throws -> Data {
         guard let u = URL(string: url) else { throw TUFError.download("invalid URL \(url)") }
         var request = URLRequest(url: u)
@@ -156,20 +170,40 @@ final class LimitedDownload: NSObject, URLSessionDataDelegate, @unchecked Sendab
 
 /// Mirrors `config.UpdaterConfig`.
 public struct UpdaterConfig: Sendable {
+    /// Maximum number of root versions fetched in one update.
     public var maxRootRotations: Int64 = 256
+    /// Maximum number of delegated roles visited when searching a target.
     public var maxDelegations = 32
+    /// Maximum size in bytes of a downloaded `root.json`.
     public var rootMaxLength: Int64 = 512_000
+    /// Maximum size in bytes of a downloaded `timestamp.json`.
     public var timestampMaxLength: Int64 = 16_384
+    /// Maximum size in bytes of a downloaded `snapshot.json` when the
+    /// timestamp gives no length.
     public var snapshotMaxLength: Int64 = 2_000_000
+    /// Maximum size in bytes of a downloaded targets metadata file when the
+    /// snapshot gives no length.
     public var targetsMaxLength: Int64 = 5_000_000
+    /// Downloads metadata and targets.
     public var fetcher: any Fetcher = DefaultFetcher()
+    /// The initial trusted `root.json` bytes.
     public var localTrustedRoot: Data
+    /// Directory where trusted metadata is cached.
     public var localMetadataDir = ""
+    /// Directory where downloaded targets are cached.
     public var localTargetsDir = ""
+    /// Base URL of the repository's metadata.
     public var remoteMetadataURL: String
+    /// Base URL of the repository's target files.
     public var remoteTargetsURL: String
+    /// Keep metadata and targets in memory only; nothing is written to or
+    /// read from disk.
     public var disableLocalCache = false
+    /// Download targets by hash-prefixed name when the root enables
+    /// consistent snapshots.
     public var prefixTargetsWithHash = true
+    /// Use only the metadata cached on disk; ``Updater/refresh()`` fails if
+    /// it is incomplete.
     public var unsafeLocalMode = false
 
     /// Mirrors `config.New`: targets default to `<remoteURL>/targets`.
@@ -203,7 +237,9 @@ func posixAttributes(_ mode: Int) -> [FileAttributeKey: Any]? {
 
 /// Mirrors `updater.Updater`.
 public struct Updater: Sendable {
+    /// The metadata trusted so far.
     public private(set) var trusted: TrustedMetadata
+    /// The configuration the updater was created with.
     public let config: UpdaterConfig
 
     /// Mirrors `updater.New`: loads the trusted root and persists it.

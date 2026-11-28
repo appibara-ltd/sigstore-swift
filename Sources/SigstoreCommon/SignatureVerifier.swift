@@ -11,6 +11,7 @@ import X509
 /// Plays the role of `github.com/sigstore/sigstore/pkg/signature.Verifier`
 /// (as returned by `signature.LoadVerifier` / `LoadDefaultVerifier`).
 public struct SignatureVerifier: Sendable {
+    /// The parsed public key, by algorithm.
     public enum Key: Sendable {
         case ecdsaP256(P256.Signing.PublicKey)
         case ecdsaP384(P384.Signing.PublicKey)
@@ -24,10 +25,12 @@ public struct SignatureVerifier: Sendable {
         case mlDSA(MLDSAPublicKey)
     }
 
+    /// The parsed public key.
     public let key: Key
     /// Hash applied to the message for ECDSA/RSA. Ignored for Ed25519 and
     /// ML-DSA (pure).
     public let hashFunction: HashFunc
+    /// The public key this verifier was loaded from.
     public let publicKey: SigstorePublicKey
 
     /// Loads a verifier, using `hashFunction` or the key's default
@@ -59,6 +62,10 @@ public struct SignatureVerifier: Sendable {
         self.publicKey = publicKey
     }
 
+    /// Loads a verifier for a classical X.509 public key (ECDSA P-256/384/521,
+    /// Ed25519 or RSA PKCS #1 v1.5), using `hashFunction` or the key's default.
+    ///
+    /// - Throws: If the key type is unsupported.
     public init(publicKey: Certificate.PublicKey, hashFunction: HashFunc? = nil) throws {
         self.publicKey = .x509(publicKey)
         if let k = P256.Signing.PublicKey(publicKey) {
@@ -94,16 +101,19 @@ public struct SignatureVerifier: Sendable {
         return .sha256
     }
 
+    /// Whether the key is a pure Ed25519 key.
     public var isEd25519: Bool {
         if case .ed25519 = key { return true }
         return false
     }
 
+    /// Whether the key is loaded as Ed25519ph.
     public var isEd25519ph: Bool {
         if case .ed25519ph = key { return true }
         return false
     }
 
+    /// Whether the key is an ML-DSA key.
     public var isMLDSA: Bool {
         if case .mlDSA = key { return true }
         return false

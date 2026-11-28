@@ -37,6 +37,7 @@ public enum TUFError: Error, CustomStringConvertible, Sendable {
         }
     }
 
+    /// The error message, prefixed by its kind as in go-tuf's `Error()`.
     public var description: String {
         switch self {
         case .repository(let m): return "repository error: \(m)"
@@ -57,10 +58,16 @@ public enum TUFError: Error, CustomStringConvertible, Sendable {
 
 // MARK: - Role names
 
+/// Mirrors go-tuf `metadata.ROOT`, `SNAPSHOT`, `TARGETS`, `TIMESTAMP`: the
+/// top-level role names.
 public enum TUFRole {
+    /// The `root` role.
     public static let root = "root"
+    /// The `snapshot` role.
     public static let snapshot = "snapshot"
+    /// The top-level `targets` role.
     public static let targets = "targets"
+    /// The `timestamp` role.
     public static let timestamp = "timestamp"
 }
 
@@ -181,15 +188,26 @@ func decodeHexBytes(_ s: String) -> [UInt8]? {
 
 /// Mirrors `metadata.Key`.
 public struct TUFKey: Sendable {
+    /// Mirrors `metadata.KeyTypeEd25519`: hex-encoded raw Ed25519 key.
     public static let typeEd25519 = "ed25519"
+    /// Mirrors `metadata.KeyTypeECDSA_SHA2_P256_COMPAT`: PEM ECDSA key
+    /// (legacy key type name).
     public static let typeECDSAP256Compat = "ecdsa-sha2-nistp256"
+    /// Mirrors `metadata.KeyTypeECDSA_SHA2_P256`: PEM ECDSA key.
     public static let typeECDSAP256 = "ecdsa"
+    /// Mirrors `metadata.KeyTypeRSASSA_PSS_SHA256`: PEM RSA key, RSASSA-PSS
+    /// with SHA-256.
     public static let typeRSASSAPSSSHA256 = "rsa"
+    /// Mirrors `metadata.KeySchemeECDSA_SHA2_P256`: ECDSA with SHA-256.
     public static let schemeECDSAP256 = "ecdsa-sha2-nistp256"
+    /// Mirrors `metadata.KeySchemeECDSA_SHA2_P384`: ECDSA with SHA-384.
     public static let schemeECDSAP384 = "ecdsa-sha2-nistp384"
 
+    /// The key type (`keytype`), e.g. ``typeEd25519``.
     public var type: String
+    /// The signature scheme (`scheme`).
     public var scheme: String
+    /// The public key (`keyval.public`): hex for Ed25519, PEM otherwise.
     public var publicKey: String
 
     init(_ v: JSONValue) throws {
@@ -253,7 +271,9 @@ struct TUFKeyVerifier {
 
 /// Mirrors `metadata.Role`.
 public struct TUFRoleKeys: Sendable {
+    /// IDs of the keys authorized to sign for the role.
     public var keyIDs: [String]
+    /// The role's signature threshold.
     public var threshold: Int
 
     init(_ v: JSONValue) throws {
@@ -265,8 +285,11 @@ public struct TUFRoleKeys: Sendable {
 
 /// Mirrors `metadata.MetaFiles`.
 public struct MetaFiles: Sendable {
+    /// Expected length in bytes; 0 when absent (not checked).
     public var length: Int64
+    /// Expected digests by algorithm name; empty when absent (not checked).
     public var hashes: [String: [UInt8]]
+    /// Version of the referenced metadata file.
     public var version: Int64
 
     init(_ v: JSONValue) throws {
@@ -286,9 +309,13 @@ public struct MetaFiles: Sendable {
 
 /// Mirrors `metadata.TargetFiles`.
 public struct TargetFiles: Sendable {
+    /// Length of the target in bytes.
     public var length: Int64
+    /// Digests of the target by algorithm name (never empty).
     public var hashes: [String: [UInt8]]
+    /// The target's `custom` JSON, if any.
     public var custom: JSONValue?
+    /// The target path (its key in the targets map).
     public var path: String
 
     init(path: String, _ v: JSONValue) throws {
@@ -333,13 +360,25 @@ func verifyHashes(_ data: Data, _ hashes: [String: [UInt8]]) throws {
 
 /// Mirrors `metadata.DelegatedRole`.
 public struct DelegatedRole: Sendable {
+    /// The delegated role's name.
     public var name: String
+    /// IDs of the keys authorized to sign for the role.
     public var keyIDs: [String]
+    /// The role's signature threshold.
     public var threshold: Int
+    /// Whether the search for a target stops at this role.
     public var terminating: Bool
+    /// Prefixes of the base64url SHA-256 of target paths the role is trusted
+    /// for; mutually exclusive with ``paths``.
     public var pathHashPrefixes: [String]?
+    /// Path patterns the role is trusted for; mutually exclusive with
+    /// ``pathHashPrefixes``.
     public var paths: [String]?
 
+    /// Decodes a delegated role from its JSON object.
+    ///
+    /// - Throws: ``TUFError`` if a field has the wrong JSON type or both
+    ///   `paths` and `path_hash_prefixes` are present.
     public init(_ v: JSONValue) throws {
         let f = try Fields(v, "delegated role")
         name = try f.string("name")
@@ -373,11 +412,20 @@ public struct DelegatedRole: Sendable {
 
 /// Mirrors `metadata.SuccinctRoles`.
 public struct SuccinctRoles: Sendable {
+    /// IDs of the keys authorized to sign for every bin role.
     public var keyIDs: [String]
+    /// The signature threshold of every bin role.
     public var threshold: Int
+    /// Number of leading bits of the target path hash that pick the bin
+    /// (0...32).
     public var bitLength: Int
+    /// Prefix of the bin role names (`<prefix>-<hex bin>`).
     public var namePrefix: String
 
+    /// Decodes succinct roles from their JSON object.
+    ///
+    /// - Throws: ``TUFError`` if a field has the wrong JSON type or
+    ///   `bit_length` is outside 0...32.
     public init(_ v: JSONValue) throws {
         let f = try Fields(v, "succinct roles")
         keyIDs = try f.strings("keyids") ?? []
@@ -407,8 +455,11 @@ public struct SuccinctRoles: Sendable {
 
 /// Mirrors `metadata.Delegations`.
 public struct Delegations: Sendable {
+    /// Keys usable by the delegated roles, by key ID.
     public var keys: [String: TUFKey]
+    /// The delegated roles, in priority order.
     public var roles: [DelegatedRole]?
+    /// Hash-bin delegations, if used instead of ``roles``.
     public var succinctRoles: SuccinctRoles?
 
     init(_ v: JSONValue) throws {
@@ -627,15 +678,26 @@ extension SignedRole {
 
 /// Mirrors `metadata.RootType`.
 public struct RootType: SignedRole {
+    /// The role name, `root`.
     public static let roleType = TUFRole.root
+    /// The `_type` field.
     public var type: String
+    /// The TUF specification version.
     public var specVersion: String
+    /// Whether the repository serves version- and hash-prefixed files.
     public var consistentSnapshot: Bool
+    /// The metadata version.
     public var version: Int64
+    /// The expiry time.
     public var expires: Date
+    /// Keys of the top-level roles, by key ID.
     public var keys: [String: TUFKey]
+    /// Key IDs and threshold of each top-level role, by role name.
     public var roles: [String: TUFRoleKeys]
 
+    /// Decodes the `signed` payload.
+    ///
+    /// - Throws: ``TUFError`` if a field has the wrong JSON type.
     public init(_ signed: JSONValue) throws {
         let f = try Fields(signed, "signed")
         type = try f.string("_type")
@@ -650,13 +712,22 @@ public struct RootType: SignedRole {
 
 /// Mirrors `metadata.TimestampType`.
 public struct TimestampType: SignedRole {
+    /// The role name, `timestamp`.
     public static let roleType = TUFRole.timestamp
+    /// The `_type` field.
     public var type: String
+    /// The TUF specification version.
     public var specVersion: String
+    /// The metadata version.
     public var version: Int64
+    /// The expiry time.
     public var expires: Date
+    /// The snapshot metadata it describes (`snapshot.json`).
     public var meta: [String: MetaFiles]
 
+    /// Decodes the `signed` payload.
+    ///
+    /// - Throws: ``TUFError`` if a field has the wrong JSON type.
     public init(_ signed: JSONValue) throws {
         let f = try Fields(signed, "signed")
         type = try f.string("_type")
@@ -669,13 +740,22 @@ public struct TimestampType: SignedRole {
 
 /// Mirrors `metadata.SnapshotType`.
 public struct SnapshotType: SignedRole {
+    /// The role name, `snapshot`.
     public static let roleType = TUFRole.snapshot
+    /// The `_type` field.
     public var type: String
+    /// The TUF specification version.
     public var specVersion: String
+    /// The metadata version.
     public var version: Int64
+    /// The expiry time.
     public var expires: Date
+    /// The targets metadata files it describes, by file name.
     public var meta: [String: MetaFiles]
 
+    /// Decodes the `signed` payload.
+    ///
+    /// - Throws: ``TUFError`` if a field has the wrong JSON type.
     public init(_ signed: JSONValue) throws {
         let f = try Fields(signed, "signed")
         type = try f.string("_type")
@@ -688,14 +768,25 @@ public struct SnapshotType: SignedRole {
 
 /// Mirrors `metadata.TargetsType`.
 public struct TargetsType: SignedRole {
+    /// The role name, `targets`.
     public static let roleType = TUFRole.targets
+    /// The `_type` field.
     public var type: String
+    /// The TUF specification version.
     public var specVersion: String
+    /// The metadata version.
     public var version: Int64
+    /// The expiry time.
     public var expires: Date
+    /// The targets this role signs for, by path.
     public var targets: [String: TargetFiles]
+    /// Delegations to other targets roles, if any.
     public var delegations: Delegations?
 
+    /// Decodes the `signed` payload.
+    ///
+    /// - Throws: ``TUFError`` if a field has the wrong JSON type or a target
+    ///   has no hashes.
     public init(_ signed: JSONValue) throws {
         let f = try Fields(signed, "signed")
         type = try f.string("_type")
@@ -709,13 +800,17 @@ public struct TargetsType: SignedRole {
 
 /// Mirrors `metadata.Signature`.
 public struct TUFSignature: Sendable {
+    /// ID of the signing key.
     public var keyID: String
+    /// The raw signature bytes.
     public var signature: [UInt8]
 }
 
 /// Mirrors `metadata.Metadata[T]`.
 public struct Metadata<T: SignedRole>: Sendable {
+    /// The decoded `signed` payload.
     public var signed: T
+    /// The signatures over the canonical `signed` payload.
     public var signatures: [TUFSignature]
     /// The received `signed` value, canonicalized for signature checks.
     let signedJSON: JSONValue

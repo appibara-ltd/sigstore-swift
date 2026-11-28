@@ -27,6 +27,7 @@ public enum BundleError: Error, CustomStringConvertible, Sendable, Equatable {
     case decodingJSON
     case decodingB64
 
+    /// The error message, prefixed with `validation error:` as in Go.
     public var description: String {
         switch self {
         case .validation(let m): return "validation error: \(m)"
@@ -55,8 +56,11 @@ public struct BundleOption: Sendable {
 
 /// Mirrors `bundle.Bundle`.
 public struct Bundle: SignedEntity {
+    /// The validated protobuf bundle.
     public private(set) var protobuf: Dev_Sigstore_Bundle_V1_Bundle
+    /// Whether any transparency log entry carries an inclusion promise (SET).
     public private(set) var hasInclusionPromise = false
+    /// Whether any transparency log entry carries an inclusion proof.
     public private(set) var hasInclusionProof = false
     var allowCertificateChain = false
 
@@ -146,6 +150,13 @@ public struct Bundle: SignedEntity {
 
     // MARK: SignedEntity
 
+    /// Mirrors `Bundle.VerificationContent`: the signing certificate (with
+    /// intermediates when the bundle carries a chain and
+    /// ``BundleOption/withAllowCertificateChain()`` was given) or the public
+    /// key hint.
+    ///
+    /// - Throws: ``BundleError/missingVerificationMaterial`` when none is set,
+    ///   or ``BundleError/validation(_:)`` when a certificate fails to parse.
     public func verificationContent() throws -> any VerificationContent {
         guard protobuf.hasVerificationMaterial else { throw BundleError.missingVerificationMaterial }
         switch protobuf.verificationMaterial.content {
@@ -179,6 +190,12 @@ public struct Bundle: SignedEntity {
         }
     }
 
+    /// Mirrors `Bundle.TlogEntries`: the bundle's transparency log entries,
+    /// parsed and validated.
+    ///
+    /// - Throws: ``BundleError/missingVerificationMaterial`` when the bundle
+    ///   has no verification material, or ``BundleError/validation(_:)`` when
+    ///   there are too many entries or one fails to parse.
     public func tlogEntries() throws -> [Entry] {
         guard protobuf.hasVerificationMaterial else { throw BundleError.missingVerificationMaterial }
         let raw = protobuf.verificationMaterial.tlogEntries
@@ -194,6 +211,13 @@ public struct Bundle: SignedEntity {
         }
     }
 
+    /// Mirrors `Bundle.SignatureContent`: the DSSE ``Envelope`` or the
+    /// ``MessageSignature`` (digest algorithm as the protobuf enum name, e.g.
+    /// `SHA2_256`).
+    ///
+    /// - Throws: ``BundleError/missingVerificationMaterial`` when the bundle
+    ///   has no content or the message signature has no digest, or an error
+    ///   when the envelope is invalid.
     public func signatureContent() throws -> any SignatureContent {
         switch protobuf.content {
         case .dsseEnvelope(let env):
@@ -218,6 +242,11 @@ public struct Bundle: SignedEntity {
         return try parseEnvelope(env)
     }
 
+    /// Mirrors `Bundle.Timestamps`: the DER-encoded RFC 3161 signed timestamps,
+    /// or an empty array when the bundle has none.
+    ///
+    /// - Throws: ``BundleError/missingVerificationMaterial`` when the bundle
+    ///   has no verification material.
     public func timestamps() throws -> [Data] {
         guard protobuf.hasVerificationMaterial else { throw BundleError.missingVerificationMaterial }
         let vm = protobuf.verificationMaterial

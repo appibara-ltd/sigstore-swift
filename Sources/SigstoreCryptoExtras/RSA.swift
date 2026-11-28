@@ -11,6 +11,7 @@ import Foundation
 /// Additionally n is capped at 16384 bits to bound verification cost; Go has
 /// no upper bound.
 public struct RSAPublicKeyComponents: Sendable {
+    /// Reasons an RSA public key is rejected.
     public enum Error: Swift.Error, Sendable, Equatable {
         case modulusEven
         case modulusTooSmall(bits: Int)
@@ -21,13 +22,18 @@ public struct RSAPublicKeyComponents: Sendable {
         case malformedDER(String)
     }
 
+    /// The smallest accepted modulus size, in bits (Go's `rsa1024min=1`).
     public static let minimumModulusBits = 1024
+    /// The largest accepted modulus size, in bits (a cap Go does not have).
     public static let maximumModulusBits = 16384
+    /// The largest accepted public exponent, 2^31 - 1.
     public static let maximumExponent = (1 << 31) - 1
 
     /// Big-endian modulus without leading zero bytes.
     public let modulus: [UInt8]
+    /// The public exponent e: odd, at least 3, at most ``maximumExponent``.
     public let exponent: Int
+    /// The modulus size in bits.
     public var bitLength: Int { BigUInt.bitLength(context.n) }
     /// Length of the modulus in bytes (k in RFC 8017).
     var modulusByteCount: Int { (bitLength + 7) / 8 }
@@ -87,9 +93,11 @@ public struct RSAPublicKeyComponents: Sendable {
 /// `crypto/rsa.VerifyPKCS1v15` and `VerifyPSS` (Go 1.27). swift-crypto's
 /// `_RSA.Signing.PublicKey` only accepts its own `Digest` values.
 public enum RSADigestVerifier {
+    /// The digest algorithms accepted for RSA verification.
     public enum Hash: Sendable, CaseIterable {
         case sha256, sha384, sha512
 
+        /// The digest length in bytes: 32, 48 or 64.
         public var digestLength: Int {
             switch self {
             case .sha256: 32

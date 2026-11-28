@@ -12,6 +12,8 @@
 
 import Foundation
 
+/// Applies Go protojson's base64 rules to the `bytes` fields of Sigstore
+/// JSON before swift-protobuf decodes it.
 public enum ProtoJSON {
     /// JSON names (and proto names) of the `bytes` fields reachable from
     /// `Bundle` (v1 and v2), `TrustedRoot`, the Rekor v2 `Entry` and the

@@ -1,7 +1,9 @@
 import Crypto
 import Foundation
 
+/// Hexadecimal encoding and decoding.
 public enum Hex {
+    /// Encodes `bytes` as lowercase hex.
     public static func encode<B: Sequence>(_ bytes: B) -> String where B.Element == UInt8 {
         let digits = Array("0123456789abcdef".utf8)
         var out = [UInt8]()
@@ -37,12 +39,14 @@ public enum Hex {
     }
 }
 
+/// Standard-alphabet base64 encoding and decoding.
 public enum Base64 {
     /// Strict standard-alphabet base64 decoding (Go's `base64.StdEncoding`).
     public static func decode(_ string: String) -> Data? {
         Data(base64Encoded: string)
     }
 
+    /// Encodes `data` as padded standard-alphabet base64.
     public static func encode<D: DataProtocol>(_ data: D) -> String {
         Data(data).base64EncodedString()
     }
@@ -54,6 +58,7 @@ public enum HashFunc: String, Sendable, Hashable, CaseIterable {
     case sha384
     case sha512
 
+    /// Returns the digest of `data` under this hash function.
     public func digest<D: DataProtocol>(_ data: D) -> [UInt8] {
         switch self {
         case .sha256: return Array(SHA256.hash(data: data))
@@ -62,6 +67,7 @@ public enum HashFunc: String, Sendable, Hashable, CaseIterable {
         }
     }
 
+    /// The digest size in bytes.
     public var size: Int {
         switch self {
         case .sha256: return 32

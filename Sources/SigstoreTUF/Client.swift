@@ -35,10 +35,18 @@ public struct Options: Sendable {
     public var forceCache = false
     /// The initial trusted `root.json`.
     public var root: Data
+    /// Directory of the on-disk metadata and target cache.
     public var cachePath: String
+    /// Base URL of the TUF repository (metadata at the root, targets under
+    /// `targets/`).
     public var repositoryBaseURL: String
+    /// Keep all metadata and targets in memory only, for read-only file
+    /// systems; also disables `cacheValidity` and `forceCache`.
     public var disableLocalCache = false
+    /// Download targets by plain name instead of hash-prefixed name, even
+    /// when the root enables consistent snapshots.
     public var disableConsistentSnapshot = false
+    /// Downloads metadata and targets; `nil` means ``DefaultFetcher``.
     public var fetcher: (any Fetcher)?
 
     /// Mirrors `tuf.DefaultOptions`: public-good root and mirror, cache in
@@ -50,23 +58,40 @@ public struct Options: Sendable {
         fetcher = DefaultFetcher()
     }
 
+    /// Mirrors sigstore-go `tuf.DefaultOptions`: the same as ``init()``.
     public static func defaultOptions() -> Options { Options() }
 
+    /// Mirrors sigstore-go `tuf.Options.WithCacheValidity`: a copy with
+    /// ``cacheValidity`` set to `days`.
     public func withCacheValidity(_ days: Int) -> Options { var o = self; o.cacheValidity = days; return o }
+    /// Mirrors sigstore-go `tuf.Options.WithForceCache`: a copy that uses the
+    /// cache without updating whenever it verifies.
     public func withForceCache() -> Options { var o = self; o.forceCache = true; return o }
+    /// Mirrors sigstore-go `tuf.Options.WithRoot`: a copy with `root` (the
+    /// trusted `root.json` bytes) as the trust anchor.
     public func withRoot(_ root: Data) -> Options { var o = self; o.root = root; return o }
+    /// Mirrors sigstore-go `tuf.Options.WithCachePath`: a copy with
+    /// ``cachePath`` set to `path`.
     public func withCachePath(_ path: String) -> Options { var o = self; o.cachePath = path; return o }
+    /// Mirrors sigstore-go `tuf.Options.WithRepositoryBaseURL`: a copy with
+    /// ``repositoryBaseURL`` set to `url`.
     public func withRepositoryBaseURL(_ url: String) -> Options {
         var o = self
         o.repositoryBaseURL = url
         return o
     }
+    /// Mirrors sigstore-go `tuf.Options.WithDisableLocalCache`: a copy that
+    /// works without writing to disk.
     public func withDisableLocalCache() -> Options { var o = self; o.disableLocalCache = true; return o }
+    /// Mirrors sigstore-go `tuf.Options.WithDisableConsistentSnapshot`: a copy
+    /// with ``disableConsistentSnapshot`` set.
     public func withDisableConsistentSnapshot() -> Options {
         var o = self
         o.disableConsistentSnapshot = true
         return o
     }
+    /// Mirrors sigstore-go `tuf.Options.WithFetcher`: a copy that downloads
+    /// through `f`.
     public func withFetcher(_ f: any Fetcher) -> Options { var o = self; o.fetcher = f; return o }
 }
 

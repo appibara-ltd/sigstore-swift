@@ -3,11 +3,18 @@
 import SwiftASN1
 import X509
 
+/// The identity a Fulcio certificate attests to. Mirrors sigstore-go
+/// `certificate.Summary`.
 public struct Summary: Sendable, Hashable, Codable {
+    /// The certificate's issuer distinguished name, as a string.
     public var certificateIssuer: String
+    /// The identity SAN: the first URI, else the first email, else the Fulcio
+    /// OtherName value.
     public var subjectAlternativeName: String
+    /// The Fulcio extensions parsed from the certificate.
     public var extensions: Extensions
 
+    /// Creates a summary from its parts.
     public init(certificateIssuer: String, subjectAlternativeName: String, extensions: Extensions) {
         self.certificateIssuer = certificateIssuer
         self.subjectAlternativeName = subjectAlternativeName
@@ -17,16 +24,23 @@ public struct Summary: Sendable, Hashable, Codable {
 
 /// Mirrors `ErrCompareExtensions`.
 public struct CompareExtensionsError: Error, CustomStringConvertible, Sendable {
+    /// The Go field name of the mismatched extension (e.g. `Issuer`).
     public let field: String
+    /// The expected value.
     public let expected: String
+    /// The value found in the certificate.
     public let actual: String
 
+    /// The error message, in Go's `ErrCompareExtensions` format.
     public var description: String {
         "expected \(field) to be \"\(expected)\", got \"\(actual)\""
     }
 }
 
+/// Thrown by ``summarizeCertificate(_:)`` when the certificate has no usable
+/// Subject Alternative Name.
 public struct SummarizeCertificateError: Error, CustomStringConvertible, Sendable {
+    /// A message describing the failure.
     public let description: String
 }
 

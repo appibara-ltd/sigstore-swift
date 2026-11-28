@@ -10,37 +10,53 @@ import SigstoreCommon
 
 /// `dsse` v0.0.1 (rekor pkg/types/dsse/v0.0.1).
 public struct DSSEV001: Sendable {
+    /// One signature of a `dsse` v0.0.1 entry.
     public struct Signature: Sendable {
         /// Base64 signature string.
         public var signature: String
         /// PEM bytes (the JSON value is base64 of the PEM).
         public var verifierPEM: Data
     }
+    /// The envelope signatures; never empty after parsing.
     public var signatures: [Signature]
+    /// The payload hash algorithm (`sha256`), if the body records one.
     public var payloadHashAlgorithm: String?
+    /// The hex payload hash, if the body records one.
     public var payloadHashValue: String?
+    /// The envelope hash algorithm (`sha256`), if the body records one.
     public var envelopeHashAlgorithm: String?
+    /// The hex envelope hash, if the body records one.
     public var envelopeHashValue: String?
 }
 
 /// `hashedrekord` v0.0.1.
 public struct HashedRekordV001: Sendable {
+    /// The signature bytes, base64-decoded from `spec.signature.content`.
     public var signatureContent: Data
+    /// The PEM certificate or public key, base64-decoded from
+    /// `spec.signature.publicKey.content`.
     public var publicKeyPEM: Data
+    /// The artifact digest algorithm: `sha256`, `sha384` or `sha512`.
     public var dataHashAlgorithm: String
+    /// The hex artifact digest.
     public var dataHashValue: String
 }
 
 /// `intoto` v0.0.2.
 public struct IntotoV002: Sendable {
+    /// One signature of an `intoto` v0.0.2 entry's envelope.
     public struct Signature: Sendable {
         /// The JSON value base64-decoded once. Rekor stores the DSSE
         /// signature's base64 text here, so this is normally base64 again.
         public var sig: Data
+        /// The PEM certificate or public key, base64-decoded from JSON.
         public var publicKeyPEM: Data
     }
+    /// The envelope signatures; never empty after parsing.
     public var signatures: [Signature]
+    /// The payload hash algorithm (`sha256`), if the body records one.
     public var payloadHashAlgorithm: String?
+    /// The hex payload hash, if the body records one.
     public var payloadHashValue: String?
 }
 

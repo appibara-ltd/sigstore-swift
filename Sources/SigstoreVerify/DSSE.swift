@@ -6,20 +6,28 @@ import Foundation
 
 /// A DSSE envelope with the payload and signatures already base64-decoded.
 public struct DSSEEnvelope: Sendable, Hashable {
+    /// One envelope signature.
     public struct Signature: Sendable, Hashable {
+        /// The optional key identifier (`keyid`).
         public var keyID: String
+        /// The raw signature bytes over the PAE of the payload.
         public var sig: Data
 
+        /// Creates a signature from a key ID and raw signature bytes.
         public init(keyID: String, sig: Data) {
             self.keyID = keyID
             self.sig = sig
         }
     }
 
+    /// The payload media type, such as ``intotoMediaType``.
     public var payloadType: String
+    /// The raw (decoded) payload bytes.
     public var payload: Data
+    /// The envelope's signatures.
     public var signatures: [Signature]
 
+    /// Creates an envelope from a payload type, decoded payload and signatures.
     public init(payloadType: String, payload: Data, signatures: [Signature]) {
         self.payloadType = payloadType
         self.payload = payload

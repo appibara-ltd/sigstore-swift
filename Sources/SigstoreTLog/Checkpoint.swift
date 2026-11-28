@@ -5,16 +5,23 @@ import Crypto
 import Foundation
 import SigstoreCommon
 
+/// A single signature line of a Rekor v1 signed note. Mirrors sumdb
+/// `note.Signature` as used by rekor `util.SignedNote`.
 public struct NoteSignature: Sendable {
+    /// The signer's key name, as written on the signature line.
     public var name: String
     /// Big-endian key hint: first 4 bytes of SHA-256(PKIX public key).
     public var hash: UInt32
+    /// The raw signature bytes, with the 4-byte key hint removed.
     public var signature: Data
 }
 
+/// A signed note: note text followed by one or more signature lines. Mirrors
+/// rekor `util.SignedNote`.
 public struct SignedNote: Sendable {
     /// The signed text, including its trailing newline.
     public var note: String
+    /// The parsed signatures; never empty after parsing.
     public var signatures: [NoteSignature]
 
     /// Mirrors `SignedNote.UnmarshalText`.
@@ -82,10 +89,16 @@ public struct SignedNote: Sendable {
     }
 }
 
+/// The body of a Rekor v1 checkpoint (signed tree head). Mirrors rekor
+/// `util.Checkpoint`.
 public struct Checkpoint: Sendable {
+    /// The log origin string (first line); never empty after parsing.
     public var origin: String
+    /// The tree size the checkpoint commits to.
     public var size: UInt64
+    /// The Merkle root hash, base64-decoded.
     public var hash: [UInt8]
+    /// Any extension lines after the root hash, up to the first empty line.
     public var otherContent: [String]
 
     /// Mirrors `Checkpoint.UnmarshalCheckpoint`.
@@ -117,9 +130,15 @@ public struct Checkpoint: Sendable {
 
 /// Mirrors rekor `util.SignedCheckpoint`.
 public struct SignedCheckpoint: Sendable {
+    /// The checkpoint parsed from the signed note's text.
     public var checkpoint: Checkpoint
+    /// The signed note that carries the checkpoint and its signatures.
     public var signedNote: SignedNote
 
+    /// Parses a signed checkpoint: the signed note, then the checkpoint in its
+    /// text. Signatures are not verified here; call `signedNote.verify(_:)`.
+    ///
+    /// - Throws: When the note or the checkpoint body is malformed.
     public init(text: String) throws {
         let note: SignedNote
         do {

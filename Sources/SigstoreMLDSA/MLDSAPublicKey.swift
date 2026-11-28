@@ -13,6 +13,7 @@ public enum MLDSAError: Error, Sendable, Equatable {
 /// mirrors `NewPublicKey(params, encoding)` and `isValidSignature` mirrors
 /// `Verify(pk, message, signature, &Options{Context: ...})`.
 public struct MLDSAPublicKey: Sendable, Hashable {
+    /// The ML-DSA parameter set (FIPS 204) this key belongs to.
     public let parameterSet: MLDSAParameterSet
     private let encoded: [UInt8]
 

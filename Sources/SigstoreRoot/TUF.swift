@@ -131,12 +131,18 @@ public final class LiveTrustedRoot: TrustedMaterial, @unchecked Sendable {
     /// The trusted root currently in use.
     public var trustedRoot: TrustedRoot { lock.withLock { current } }
 
+    /// The current trusted root's timestamping authorities.
     public var timestampingAuthorities: [any TimestampingAuthority] { trustedRoot.timestampingAuthorities }
+    /// The current trusted root's certificate authorities.
     public var fulcioCertificateAuthorities: [any CertificateAuthority] { trustedRoot.fulcioCertificateAuthorities }
+    /// The current trusted root's Rekor logs, keyed by hex-encoded log ID.
     public var rekorLogs: [String: TransparencyLog] { trustedRoot.rekorLogs }
+    /// The current trusted root's CT logs, keyed by hex-encoded log ID.
     public var ctLogs: [String: TransparencyLog] { trustedRoot.ctLogs }
+    /// Forwards to the current trusted root's `publicKeyVerifier(_:)`.
     public func publicKeyVerifier(_ keyID: String) throws -> any TimeConstrainedVerifier {
         try trustedRoot.publicKeyVerifier(keyID)
     }
+    /// The current trusted root's public key verifiers.
     public var publicKeyVerifiers: [any TimeConstrainedVerifier] { trustedRoot.publicKeyVerifiers }
 }

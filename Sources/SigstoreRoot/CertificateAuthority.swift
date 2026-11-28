@@ -15,12 +15,21 @@ public protocol CertificateAuthority: Sendable {
 
 /// Mirrors `root.FulcioCertificateAuthority`.
 public struct FulcioCertificateAuthority: CertificateAuthority {
+    /// The trusted root certificate chains must end at.
     public var root: Certificate
+    /// Intermediate certificates available for building chains to `root`.
     public var intermediates: [Certificate]
+    /// Start of the period this authority is trusted for; `nil` means
+    /// unbounded. ``verify(_:observerTimestamp:)`` rejects earlier times.
     public var validityPeriodStart: Date?
+    /// End of the period this authority is trusted for; `nil` means
+    /// unbounded. ``verify(_:observerTimestamp:)`` rejects later times.
     public var validityPeriodEnd: Date?
+    /// The authority's URI (informational).
     public var uri: String
 
+    /// Creates a Fulcio certificate authority from its root, optional
+    /// intermediates and optional validity period.
     public init(
         root: Certificate,
         intermediates: [Certificate] = [],
