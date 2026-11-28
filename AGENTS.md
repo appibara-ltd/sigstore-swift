@@ -6,7 +6,7 @@ Rules for AI agents (and humans) working on sigstore-swift.
 
 sigstore-swift is a general-purpose Swift port of the verification side of
 [sigstore-go](https://github.com/sigstore/sigstore-go) (reference: v1.4.1).
-It mirrors sigstore-go; it is not an app-specific tool. Signing comes later.
+It mirrors sigstore-go; it is not an app-specific tool. Signing (`pkg/sign`) is being ported in stages.
 
 Read `PROGRESS.md` first: it holds status, next steps and decisions. Update it
 at the end of every session.
@@ -70,6 +70,7 @@ at the end of every session.
 | `SigstoreTLog` | `pkg/tlog` |
 | `SigstoreTUF` | `pkg/tuf` (+ go-tuf v2 `metadata`) |
 | `SigstoreVerify` | `pkg/verify` |
+| `SigstoreSign` | `pkg/sign` |
 | `SigstoreFulcio` | `pkg/fulcio/certificate` |
 | `SigstoreMLDSA` | Go `crypto/mldsa` (verify only, pure Swift) |
 | `SigstoreCryptoExtras` | Go `crypto/ed25519` Ed25519ph and `crypto/rsa` over a digest (verify only, pure Swift) |

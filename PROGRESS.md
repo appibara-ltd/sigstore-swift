@@ -2,7 +2,17 @@
 
 Continuity log. Update at the end of every session.
 
-## Status (2026-11-28, session 1, part 16)
+## Status (2026-11-28, session 1, part 17)
+
+**Signing started (stage 1 of `pkg/sign`), new module `SigstoreSign`:**
+`Keypair`, `EphemeralKeypair` (ECDSA P-256/384/521, RSA PKCS #1 v1.5 and
+the PSS algorithms, Ed25519), `Content` (`PlainData`, `DSSEData`), the
+provider protocols (`CertificateProvider`, `CertificateChainProvider`,
+`Transparency`) and `bundle(_:keypair:options:)`, which builds a v0.3
+bundle and, given trusted material, verifies it before returning it.
+Tests port keys_test.go, content_test.go and signer_test.go and round-trip
+every algorithm through `Verifier`. Next stages: Fulcio, Rekor v1/v2, TSA
+(see Next steps). `swift test`: 225 tests.
 
 **0.3.1 released (tag on 060de42), the first release made by the
 tag-triggered `release.yml`:** immutable, with the source archive and its
@@ -347,10 +357,15 @@ sorted signed attributes and the root EKU check, released as 0.3.0. The
    and bump the dependency; ML-DSA-44 (sigstore-go's leaf key) also needs
    swift-crypto #422 and a swift-certificates follow-up. Re-check both PRs
    before starting.
-4. **Signing** (sigstore-go `pkg/sign`): ephemeral keys, OIDC token
-   handling, Fulcio certificate requests, Rekor v1/v2 uploads, TSA
-   requests, bundle building. Then enable sigstore-conformance's sign
-   tests.
+4. **Signing** (sigstore-go `pkg/sign`), in stages, each its own PR:
+   1. done: keys, content, provider protocols, `bundle` (no network);
+   2. `TimestampAuthority` (RFC 3161 requests) and its `BundleOptions`
+      field (`timestamping.go`);
+   3. `Fulcio` (`certificate.go`) with retries and user agent
+      (`retry.go`, `useragent.go`);
+   4. `Rekor` v1 and v2 (`transparency.go`);
+   5. OIDC token handling (`identity_*.go`), then sigstore-conformance's
+      sign tests in the conformance client.
 
 ## Decisions
 
@@ -390,7 +405,18 @@ sorted signed attributes and the root EKU check, released as 0.3.0. The
     `SECURITY.md`).
 - Minimum macOS is 26 (after 0.1.0, user decision): no support for older
   macOS. Linux and Windows unchanged.
-- Verify-only first; signing later.
+- Verify-only first; signing later. Signing (`SigstoreSign`, from
+  2026-11-28) deviates from sigstore-go `pkg/sign`:
+  - `bundle(_:keypair:options:)` is `async throws` and takes a non-optional
+    `keypair` (Go checks for nil); there is no `Context` option (Swift
+    task cancellation instead).
+  - Getters are properties (`hint`, `hashAlgorithm`, ...); `GetCertificate`,
+    `GetCertificateChain` and `GetTransparencyLogEntry` are
+    `certificate(keypair:options:)`, `certificateChain(keypair:options:)`
+    and `transparencyLogEntry(keyOrCertPEM:bundle:)`, the bundle `inout`.
+  - `EphemeralKeypair` cannot sign Ed25519ph (swift-crypto has none; the
+    hand-written `SigstoreCryptoExtras` is verify-only) and throws for it.
+    `MLDSAKeypair` (Go 1.26 `crypto/mldsa`) is not ported.
 - Mirror sigstore-go names (see AGENTS.md for translation rules).
 - Protobuf types generated from protobuf-specs @ `a84bc5ff572a` (the commit
   sigstore-go v1.4.1 pins) with swift-protobuf 1.41.0; generated code checked
@@ -545,6 +571,16 @@ sorted signed attributes and the root EKU check, released as 0.3.0. The
   certificates ourselves; deferred.
 
 ## Spec questions
+
+- sigstore-go signs with the RSA-PSS algorithms (`PKIX_RSA_PSS_*`) by
+  passing a `crypto.Hash` to `rsa.PrivateKey.Sign`, which makes a PKCS #1
+  v1.5 signature, not PSS (pkg/sign keys.go `SignData`). Mirrored, so the
+  signatures verify with sigstore-go's default RSA verifier; worth raising
+  upstream.
+- A pure Ed25519 `PlainData` bundle stores the message itself as the
+  message digest, with algorithm `HASH_ALGORITHM_UNSPECIFIED`, which
+  `verifyMessageSignatureContent` rejects, so sigstore-go's `sign.Bundle`
+  with a trusted root fails for it (DSSE works). Mirrored and tested.
 
 - sigstore-go accepts any Rekor v1 checkpoint whose root hash matches the
   proof, without comparing the checkpoint tree size to the proof's
