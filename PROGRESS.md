@@ -12,7 +12,7 @@ provider protocols (`CertificateProvider`, `CertificateChainProvider`,
 bundle and, given trusted material, verifies it before returning it.
 Tests port keys_test.go, content_test.go and signer_test.go and round-trip
 every algorithm through `Verifier`. Next stages: Fulcio, Rekor v1/v2, TSA
-(see Next steps). `swift test`: 225 tests.
+(see Next steps). `swift test`: 226 tests.
 
 **0.3.1 released (tag on 060de42), the first release made by the
 tag-triggered `release.yml`:** immutable, with the source archive and its

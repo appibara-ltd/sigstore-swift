@@ -294,6 +294,13 @@ struct SignTests {
         }
     }
 
+    @Test func nonUTF8HintIsRejected() async throws {
+        let keypair = try EphemeralKeypair(options: EphemeralKeypairOptions(hint: Data([0xff, 0xfe])))
+        await #expect(throws: (any Error).self) {
+            try await bundle(PlainData(data: Data("qwerty".utf8)), keypair: keypair)
+        }
+    }
+
     @Test func mlDSAKeypairIsRejected() async throws {
         let keypair = MLDSAClaimingKeypair(base: try EphemeralKeypair())
         await #expect(throws: (any Error).self) {

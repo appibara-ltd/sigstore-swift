@@ -99,7 +99,12 @@ public func bundle(
         verifierPEM = pemBlock(type: "CERTIFICATE", der: Array(der))
     } else {
         var identifier = Dev_Sigstore_Common_V1_PublicKeyIdentifier()
-        identifier.hint = String(decoding: keypair.hint, as: UTF8.self)
+        // The hint is a proto3 string, which must be UTF-8 (Go's
+        // protojson.Marshal fails on the bundle otherwise).
+        guard let hint = String(bytes: keypair.hint, encoding: .utf8) else {
+            throw SigstoreError("public key hint is not valid UTF-8")
+        }
+        identifier.hint = hint
         material.publicKey = identifier
         verifierPEM = try keypair.publicKeyPem()
     }
