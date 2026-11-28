@@ -39,6 +39,16 @@ and depend on the `Sigstore` product (or a single module, such as
 .product(name: "Sigstore", package: "sigstore-swift")
 ```
 
+Each GitHub release also carries the tag's source archive and a
+Sigstore-signed SLSA provenance attestation for it
+(`sigstore-swift-X.Y.Z.tar.gz.intoto.jsonl`), made by the
+[release workflow](.github/workflows/release.yml). To check that an archive
+was built from this repository:
+
+```bash
+gh attestation verify sigstore-swift-X.Y.Z.tar.gz --repo appibara-ltd/sigstore-swift
+```
+
 ## Verifying a GitHub artifact attestation
 
 ```swift

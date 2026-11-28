@@ -352,6 +352,16 @@ sorted signed attributes and the root EKU check, released as 0.3.0.
     (github/codeql `supported-versions-compilers.rst`) and Package.swift
     needs tools 6.4.
   - Dependabot uses the `swift` ecosystem in place of `gomod`.
+  - Signed releases (Scorecard Signed-Releases): `release.yml` runs when a
+    release is published (or by hand for an existing tag), attaches
+    `git archive` of the tag and its `actions/attest-build-provenance`
+    bundle as `<archive>.intoto.jsonl` (the extension Scorecard's
+    `releasesHaveProvenance` probe looks for; it checks the last 5
+    releases).
+  - Rulesets (2026-11-28): `main` blocks deletion and force pushes; tags
+    `refs/tags/*` block deletion, force pushes and updates. No bypass
+    actors. Requiring pull requests or status checks is not set: direct
+    pushes to `main` are still the workflow.
   - Static analysis of the Swift code (CodeQL lacks Swift 6.4):
     `static-analysis.yml` runs SwiftLint 0.65.1 (`.swiftlint.yml`: style
     rules off, since the code mirrors Go names; force unwraps/tries, lossy
