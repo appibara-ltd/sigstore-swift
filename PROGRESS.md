@@ -2,7 +2,17 @@
 
 Continuity log. Update at the end of every session.
 
-## Status (2026-11-27, session 1, part 15)
+## Status (2026-11-28, session 1, part 16)
+
+**0.3.1 released (tag on 060de42), the first release made by the
+tag-triggered `release.yml`:** immutable, with the source archive and its
+Sigstore-signed SLSA provenance attached (verified with sigstore-swift).
+A patch release with no public API changes: `Updater.downloadTarget`
+throws instead of trapping on a target with no hashes; doc comments on
+every public declaration. Since 0.3.0 the repository also gained CI
+hardening (Scorecard, CodeQL, SwiftLint, Semgrep, dependency review),
+the OpenSSF Best Practices passing badge, rulesets, and signed releases.
+Changes now reach `main` through pull requests. `swift test`: 205 tests.
 
 **0.3.0 released (tag on 84f6869, CI run 46046670473 green on all six
 jobs).** New since 0.2.0: `SigningConfig` (`pkg/root`) ported; BER
@@ -307,7 +317,8 @@ v1.4.1 `examples/signing_config.v0.2.json` (Apache-2.0), sha256
 Done: 0.2.0 tagged and released; appitool `self-update` integration
 (embedded GitHub TUF root, sigstore-swift first, `gh` cross-check);
 `SigningConfig` (`pkg/root`), BER TimeStampTokens, embedded test data,
-sorted signed attributes and the root EKU check, released as 0.3.0.
+sorted signed attributes and the root EKU check, released as 0.3.0. The
+`downloadTarget` fix and the doc comments, released as 0.3.1.
 
 1. **Hardening before announcing.** Watch the weekly fuzz runs (Mondays
    03:00 UTC, 15 min per target). Then a security review, with a human
