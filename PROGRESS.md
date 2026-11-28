@@ -319,14 +319,14 @@ sorted signed attributes and the root EKU check, released as 0.3.0.
    enables private vulnerability reporting and Dependabot alerts in the
    repository settings; confirm the first Scorecard, CodeQL and Dependabot
    runs; add `swift` to CodeQL once it supports Swift 6.4.
-   OpenSSF Best Practices (metal series): project 17219, passing level
-   96% (2026-11-28). `crypto_weaknesses` is Unmet (a SHOULD): SHA-1 is
+   OpenSSF Best Practices (metal series): project 17219, **passing**
+   badge earned 2026-11-28. `crypto_weaknesses` is Unmet (a SHOULD): SHA-1 is
    accepted in TSA tokens, as Go's pkcs7. `crypto_keylength` is Met: every
    RSA key is parsed by swift-crypto `_RSA.Signing.PublicKey(derRepresentation:)`,
    which requires 2048 bits, so the effective minimum is 2048 (stricter
    than Go's 1024; `RSAPublicKeyComponents.minimumModulusBits` = 1024 is
-   never the binding check). Open: the three `static_analysis*` criteria,
-   once `static-analysis.yml` runs green. Every public
+   never the binding check). The `static_analysis*` criteria are met by
+   `static-analysis.yml` (green on 405e6fa). Next level: silver. Every public
    declaration now has a doc comment; `.spi.yml` lets Swift Package Index
    host the DocC reference once the package is submitted there.
 3. **ML-DSA in X.509 certificates**, the only remaining verify gap
