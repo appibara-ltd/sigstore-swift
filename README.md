@@ -1,8 +1,17 @@
 # sigstore-swift
 
-A Swift port of the verification side of
-[sigstore-go](https://github.com/sigstore/sigstore-go). **Early development:
-not yet security-reviewed; do not rely on it for production decisions.**
+[![CI](https://github.com/appibara-ltd/sigstore-swift/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/appibara-ltd/sigstore-swift/actions/workflows/ci.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/appibara-ltd/sigstore-swift/badge)](https://scorecard.dev/viewer/?uri=github.com/appibara-ltd/sigstore-swift)
+
+A Swift library for verifying [Sigstore](https://www.sigstore.dev)
+signatures and attestations, such as GitHub artifact attestations. It checks
+the signing certificate, transparency log entries and timestamps against
+trusted roots fetched securely over TUF. Runs on macOS, Linux and Windows.
+
+It is a port of the verification side of
+[sigstore-go](https://github.com/sigstore/sigstore-go), the Go Sigstore
+library. **Early development: not yet security-reviewed; do not rely on it
+for production decisions.**
 
 Status and roadmap: [PROGRESS.md](PROGRESS.md).
 
@@ -11,8 +20,20 @@ Status and roadmap: [PROGRESS.md](PROGRESS.md).
 Swift 6.4. macOS 26 or later, Linux or Windows (tested on the latest macOS,
 Linux and Windows).
 
+## Installation
+
+Add the package to your `Package.swift` (releases and notes:
+[GitHub Releases](https://github.com/appibara-ltd/sigstore-swift/releases)):
+
 ```swift
-.package(url: "https://github.com/appibara-ltd/sigstore-swift.git", branch: "main")
+.package(url: "https://github.com/appibara-ltd/sigstore-swift.git", .upToNextMinor(from: "0.3.0"))
+```
+
+and depend on the `Sigstore` product (or a single module, such as
+`SigstoreVerify`):
+
+```swift
+.product(name: "Sigstore", package: "sigstore-swift")
 ```
 
 ## Verifying a GitHub artifact attestation
@@ -78,6 +99,16 @@ scripts/run-conformance.sh
 brew install protobuf swift-protobuf
 ./scripts/generate-protos.sh
 ```
+
+## Feedback and contributing
+
+- Bugs and feature requests:
+  [GitHub issues](https://github.com/appibara-ltd/sigstore-swift/issues).
+- Security vulnerabilities: report them privately as described in
+  [SECURITY.md](SECURITY.md), not in a public issue.
+- Contributions: pull requests are welcome; see
+  [CONTRIBUTING.md](CONTRIBUTING.md) for how to build, test and submit a
+  change.
 
 ## License
 
