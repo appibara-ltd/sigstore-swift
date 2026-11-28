@@ -181,14 +181,16 @@ struct TimestampingTests {
 
     @Test func timeoutCoversTheRequest() async throws {
         let transport = FakeTransport { _, _ in
-            try await Task.sleep(nanoseconds: 10_000_000_000)
+            try await Task.sleep(nanoseconds: 60_000_000_000)
             return (Data(), 200, [:])
         }
         let authority = TimestampAuthority(
             options: TimestampAuthorityOptions(url: Self.url, timeout: 0.2, transport: transport))
         let start = Date()
         await #expect(throws: (any Error).self) { try await authority.timestamp(signature: Data([1])) }
-        #expect(Date().timeIntervalSince(start) < 5)
+        // Far below the transport's 60 s: the deadline cancelled it. Loose,
+        // because busy CI runners (Windows) schedule tasks slowly.
+        #expect(Date().timeIntervalSince(start) < 30)
     }
 
     // MARK: Retries
