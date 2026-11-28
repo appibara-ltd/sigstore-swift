@@ -84,6 +84,22 @@ Other checks CI runs:
   and Windows, conformance, fuzzing, CodeQL and dependency review) must
   pass.
 
+## Releasing
+
+Maintainers release by tagging a commit that is already on `main`:
+
+```bash
+git tag -a 0.4.0 -m "sigstore-swift 0.4.0"
+git push origin 0.4.0
+```
+
+The [release workflow](.github/workflows/release.yml) then builds the
+source archive, signs its SLSA provenance with Sigstore, and publishes the
+GitHub release with generated notes (the merged pull requests) and both
+files attached. A tag with a `-` suffix (`0.4.0-rc.1`) becomes a
+pre-release. Only repository admins can create tags, and published
+releases are immutable.
+
 ## License
 
 By contributing, you agree that your contributions are licensed under the

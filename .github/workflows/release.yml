@@ -1,20 +1,28 @@
-# Signed releases: when a GitHub release is published, attach the tag's
-# source archive and a Sigstore-signed SLSA build provenance attestation
-# for it (actions/attest-build-provenance; the bundle is also stored in
-# GitHub's attestation API). SwiftPM consumers fetch the tag directly; the
-# archive lets anyone verify that a release's source came from this
-# repository's workflow:
+# Releases. Pushing a version tag (X.Y.Z or X.Y.Z-suffix) on a commit that
+# is on main makes this workflow:
+#   1. build the tag's source archive (git archive);
+#   2. attest its SLSA build provenance, signed with Sigstore
+#      (actions/attest-build-provenance; also stored in GitHub's attestation
+#      API);
+#   3. create the GitHub release as a draft, titled "sigstore-swift X.Y.Z"
+#      with GitHub's generated notes (merged pull requests), attach the
+#      archive and the bundle (<archive>.intoto.jsonl), then publish it.
+#      A tag with a "-" suffix becomes a pre-release.
+# Publishing last keeps signatures on every published release; with
+# immutable releases enabled, assets cannot change after that.
+#
+# Verify an archive:
 #
 #   gh attestation verify sigstore-swift-X.Y.Z.tar.gz \
-#     --repo appibara-ltd/sigstore-swift \
-#     --bundle sigstore-swift-X.Y.Z.tar.gz.intoto.jsonl
+#     --repo appibara-ltd/sigstore-swift
 #
-# Run it by hand (workflow_dispatch) to sign an existing release.
+# Run it by hand (workflow_dispatch) to sign an existing release that is not
+# immutable (0.1.0-0.3.0 were signed this way).
 name: Release
 
 on:
-  release:
-    types: [published]
+  push:
+    tags: ["[0-9]*.[0-9]*.[0-9]*"]
   workflow_dispatch:
     inputs:
       tag:
@@ -23,28 +31,43 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: release-${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+  cancel-in-progress: false
+
 jobs:
-  provenance:
-    name: Source archive and provenance
+  release:
+    name: Sign and publish
     runs-on: ubuntu-24.04
     permissions:
-      contents: write      # upload release assets
+      contents: write      # create the release and upload assets
       id-token: write      # Sigstore keyless signing
       attestations: write  # store the attestation in GitHub
     env:
-      TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+      TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
     steps:
       - name: Check tag
+        shell: bash
         run: |
-          case "$TAG" in
-            ''|*[!0-9A-Za-z.+-]*) echo "invalid tag: $TAG" >&2; exit 1 ;;
-          esac
+          if [[ ! "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "not a version tag: $TAG" >&2
+            exit 1
+          fi
 
       - name: Checkout tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: refs/tags/${{ env.TAG }}
+          fetch-depth: 0
           persist-credentials: false
+
+      # Only reviewed code is released: the tagged commit must be on main.
+      - name: Check the tag is on main
+        run: |
+          if ! git merge-base --is-ancestor "refs/tags/${TAG}" refs/remotes/origin/main; then
+            echo "tag ${TAG} is not on main" >&2
+            exit 1
+          fi
 
       - name: Create source archive
         run: |
@@ -58,12 +81,20 @@ jobs:
         with:
           subject-path: sigstore-swift-${{ env.TAG }}.tar.gz
 
-      - name: Upload to the release
+      - name: Create or update the release
         env:
           GH_TOKEN: ${{ github.token }}
           BUNDLE: ${{ steps.attest.outputs.bundle-path }}
         run: |
           cp "$BUNDLE" "sigstore-swift-${TAG}.tar.gz.intoto.jsonl"
-          gh release upload "$TAG" --clobber --repo "$GITHUB_REPOSITORY" \
-            "sigstore-swift-${TAG}.tar.gz" \
-            "sigstore-swift-${TAG}.tar.gz.intoto.jsonl"
+          set -- "sigstore-swift-${TAG}.tar.gz" "sigstore-swift-${TAG}.tar.gz.intoto.jsonl"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            # An existing release (manual run): attach the files.
+            gh release upload "$TAG" --clobber --repo "$GITHUB_REPOSITORY" "$@"
+          else
+            prerelease=""
+            case "$TAG" in *-*) prerelease="--prerelease" ;; esac
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft \
+              --title "sigstore-swift ${TAG}" --generate-notes $prerelease "$@"
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          fi
