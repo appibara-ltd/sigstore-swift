@@ -462,7 +462,12 @@ struct TestTSA {
         case Self.sha384: imprint = Array(SHA384.hash(data: artifact))
         default: imprint = Array(SHA256.hash(data: artifact))
         }
+        return try response(imprint: imprint, o)
+    }
 
+    /// A DER TimeStampResp over a precomputed message imprint (hashed with
+    /// `o.hashOID`).
+    func response(imprint: [UInt8], _ o: TokenOptions = .init()) throws -> Data {
         // TSTInfo
         var t = DER.Serializer()
         try t.appendConstructedNode(identifier: .sequence) { s in
